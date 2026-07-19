@@ -2,18 +2,18 @@
   "test_rows": 30585,
   "test_days": 10,
   "test_fraud_rows": 66,
-  "t_challenge": 1.0,
-  "t_block": 1.0,
+  "t_challenge": 0.06976744186046512,
+  "t_block": 0.4117647058823529,
   "recall_at_alert": 0.803030303030303,
-  "precision_at_alert": 0.6385542168674698,
-  "alerts_per_day": 8.3,
-  "hard_blocks_per_day": 8.3,
-  "false_block_rate": 0.000982994200334218,
-  "expected_cost": 95.0,
+  "precision_at_alert": 0.9814814814814815,
+  "alerts_per_day": 5.4,
+  "hard_blocks_per_day": 5.4,
+  "false_block_rate": 3.276647334447393e-05,
+  "expected_cost": 66.0,
   "naive_cost": 330.0,
-  "cost_vs_naive": 0.2878787878787879,
+  "cost_vs_naive": 0.2,
   "recall_by_variant": {
-    "blatant": 0.9473684210526315,
-    "evasive": 0.7446808510638298
+    "blatant": 1.0,
+    "evasive": 0.723404255319149
   }
 }

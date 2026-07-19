@@ -37,6 +37,14 @@ FEATURE_COLUMNS = [
     "device_card_count_1h",        # distinct cards seen on one device in 1h (bot signal)
     "session_behavior_score",      # behavioral-biometric match, provided upstream
     "is_ecom",
+    # Cycle 3 (D-016): adversarial-robust additions — favor OBSERVED history over
+    # attacker-suppliable fields (a spoofed device_age_days can't fake store history)
+    "hour_dev_from_card_mean",     # circular deviation from card's usual transaction hour
+    "amount_zscore_card",          # amount vs card's own mean/std, not just ratio
+    "merchant_txn_count_log",      # merchant popularity (log1p of observed volume)
+    "merchant_observed_age_days",  # how long WE have seen this merchant
+    "device_observed_age_days",    # how long WE have seen this device (vs self-reported)
+    "device_alltime_cards",        # distinct cards ever on this device (bot/mule signal)
 ]
 
 # Human-readable names required by the explainability spec (D-011): the model
@@ -59,6 +67,12 @@ FEATURE_DISPLAY = {
     "device_card_count_1h": "Distinct cards on this device (1h)",
     "session_behavior_score": "Behavioral biometric match score",
     "is_ecom": "Online (card-not-present) transaction",
+    "hour_dev_from_card_mean": "Unusual time of day for this card",
+    "amount_zscore_card": "Amount deviation from card's spending pattern",
+    "merchant_txn_count_log": "Merchant transaction volume",
+    "merchant_observed_age_days": "How long this merchant has been observed",
+    "device_observed_age_days": "How long this device has been observed",
+    "device_alltime_cards": "Total distinct cards seen on this device",
 }
 
 
@@ -74,6 +88,12 @@ class InMemoryFeatureStore:
         self.card_amt_stats = defaultdict(lambda: [0, 0.0])   # count, sum
         self.merchant_times = defaultdict(deque)    # merchant -> (ts, amount)
         self.device_cards = defaultdict(deque)      # device -> (ts, card)
+        # Cycle 3 state
+        self.card_hour_vec = defaultdict(lambda: [0.0, 0.0, 0])   # sum sin, sum cos, n
+        self.card_amt_sq = defaultdict(float)                     # sum of amount^2
+        self.merchant_stats = defaultdict(lambda: [None, 0])      # first_seen_ts, count
+        self.device_first_seen = {}                               # device -> ts
+        self.device_all_cards = defaultdict(set)                  # device -> {cards}
 
     @staticmethod
     def _k(inst, entity):
@@ -133,6 +153,36 @@ class InMemoryFeatureStore:
             "device_card_count_1h": len({c for _, c in dcards}),
             "session_behavior_score": t.session_behavior_score,
             "is_ecom": int(t.channel == "ecom"),
+            **self._cycle3_features(t, ck, mk, dk, cnt, total),
+        }
+
+    def _cycle3_features(self, t, ck, mk, dk, cnt, total) -> dict:
+        ts = t.timestamp
+        # Circular hour deviation from the card's own habit (0 = usual time, 12 = opposite)
+        s, c, n = self.card_hour_vec[ck]
+        if n:
+            mean_hour = float(np.arctan2(s / n, c / n)) * 24 / (2 * np.pi) % 24
+            hour_dev = min(abs(ts.hour - mean_hour), 24 - abs(ts.hour - mean_hour))
+        else:
+            hour_dev = 0.0
+        # Amount z-score against the card's own history
+        if cnt >= 3:
+            mean = total / cnt
+            var = max(self.card_amt_sq[ck] / cnt - mean ** 2, 1e-6)
+            z = abs(t.amount - mean) / np.sqrt(var)
+        else:
+            z = 0.0
+        first_m, m_count = self.merchant_stats[mk]
+        m_age = (ts - first_m).total_seconds() / 86400 if first_m is not None else 0.0
+        d_first = self.device_first_seen.get(dk)
+        d_age = (ts - d_first).total_seconds() / 86400 if d_first is not None else 0.0
+        return {
+            "hour_dev_from_card_mean": float(hour_dev),
+            "amount_zscore_card": float(min(z, 20.0)),
+            "merchant_txn_count_log": float(np.log1p(m_count)),
+            "merchant_observed_age_days": float(m_age),
+            "device_observed_age_days": float(d_age),
+            "device_alltime_cards": len(self.device_all_cards[dk]),
         }
 
     def update(self, t) -> None:
@@ -148,6 +198,18 @@ class InMemoryFeatureStore:
         st[1] += t.amount
         self.merchant_times[self._k(t.institution_id, t.merchant_id)].append((t.timestamp, t.amount))
         self.device_cards[self._k(t.institution_id, t.device_id)].append((t.timestamp, t.card_id))
+        # Cycle 3 state
+        mk, dk = self._k(t.institution_id, t.merchant_id), self._k(t.institution_id, t.device_id)
+        ang = 2 * np.pi * t.timestamp.hour / 24
+        hv = self.card_hour_vec[ck]
+        hv[0] += float(np.sin(ang)); hv[1] += float(np.cos(ang)); hv[2] += 1
+        self.card_amt_sq[ck] += t.amount ** 2
+        ms = self.merchant_stats[mk]
+        if ms[0] is None:
+            ms[0] = t.timestamp
+        ms[1] += 1
+        self.device_first_seen.setdefault(dk, t.timestamp)
+        self.device_all_cards[dk].add(t.card_id)
 
 
 def build_feature_frame(df: pd.DataFrame) -> pd.DataFrame:

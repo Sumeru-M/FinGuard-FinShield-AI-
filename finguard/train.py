@@ -41,19 +41,25 @@ def expected_cost(y, score, t_chal, t_block):
     )
 
 
-def tune_thresholds(y, score, n_days):
-    """Grid-search dual thresholds minimizing expected cost under the alert cap."""
-    grid = np.unique(np.quantile(score, np.linspace(0.80, 0.99995, 400)))
-    best = (np.inf, 0.5, 0.9)
-    for i, t_chal in enumerate(grid):
-        n_alerts = (score >= t_chal).sum() / n_days     # every challenge/block alerts
-        if n_alerts > ALERT_CAP_PER_DAY:
-            continue
-        for t_block in grid[i:]:
-            c = expected_cost(y, score, t_chal, t_block)
-            if c < best[0]:
-                best = (c, float(t_chal), float(t_block))
-    return best
+def analytic_thresholds(oof_scores, n_train_days):
+    """C3: derive thresholds from the cost model itself (valid because scores are
+    calibrated probabilities). Per-transaction expected costs:
+        approve   = COST_FN * p
+        challenge = COST_FRAUD_CHAL * p + COST_FP_CHAL * (1-p)
+        block     = COST_FP_BLOCK * (1-p)
+    challenge beats approve above t_chal; block beats challenge above t_block.
+    No test-set tuning (the previous grid search leaked test labels into the
+    thresholds and overfit to <100 fraud rows). Alert cap enforced on OOF volume."""
+    t_chal = COST_FP_CHAL / (COST_FN - COST_FRAUD_CHAL + COST_FP_CHAL)
+    t_block = (COST_FP_BLOCK - COST_FP_CHAL) / \
+              (COST_FP_BLOCK - COST_FP_CHAL + COST_FRAUD_CHAL)
+    # D-007: if the challenge tier would exceed the alert cap (estimated on OOF),
+    # raise t_chal to the cap-satisfying quantile
+    est_alerts_per_day = (oof_scores >= t_chal).sum() / n_train_days
+    if est_alerts_per_day > ALERT_CAP_PER_DAY:
+        k = int(ALERT_CAP_PER_DAY * n_train_days)
+        t_chal = float(np.sort(oof_scores)[-k])
+    return float(t_chal), float(max(t_block, t_chal))
 
 
 def bias_proxy_review(ff, score, threshold):
@@ -77,20 +83,43 @@ def main():
     ff["y"] = (ff["label"] != "confirmed_legitimate").astype(int)
 
     days = ff["timestamp"].dt.normalize()
-    cutoff = days.unique()[int(len(days.unique()) * 0.7)]
+    uniq = days.unique()
+    cutoff = uniq[int(len(uniq) * 0.7)]
     train, test = ff[days < cutoff], ff[days >= cutoff]
     n_test_days = test["timestamp"].dt.normalize().nunique()
 
-    model = lgb.LGBMClassifier(
-        n_estimators=400, learning_rate=0.05, num_leaves=63,
-        scale_pos_weight=COST_FN,          # asymmetric cost pushed into training (D-010)
-        random_state=42, verbose=-1,
-    )
-    model.fit(train[FEATURE_COLUMNS], train["y"])
-    score = model.predict_proba(test[FEATURE_COLUMNS])[:, 1]
+    def make_model():
+        return lgb.LGBMClassifier(
+            n_estimators=400, learning_rate=0.05, num_leaves=63,
+            scale_pos_weight=COST_FN,      # asymmetric cost pushed into training (D-010)
+            random_state=42, verbose=-1,
+        )
+
+    # C3-2 (D-016): out-of-fold isotonic calibration — every train row gets a raw score
+    # from a fold-model that never saw it, the calibrator fits on those, and the final
+    # model trains on the FULL window (fraud rows are too scarce to sacrifice a holdout;
+    # a chronological holdout attempt cost 12pts of recall — see registry train_..._150223)
+    from sklearn.isotonic import IsotonicRegression
+    from sklearn.model_selection import StratifiedKFold
+
+    oof = np.zeros(len(train))
+    skf = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
+    Xtr, ytr = train[FEATURE_COLUMNS], train["y"].values
+    for tr_idx, va_idx in skf.split(Xtr, ytr):
+        m = make_model()
+        m.fit(Xtr.iloc[tr_idx], ytr[tr_idx])
+        oof[va_idx] = m.predict_proba(Xtr.iloc[va_idx])[:, 1]
+    calibrator = IsotonicRegression(out_of_bounds="clip", y_min=0.0, y_max=1.0)
+    calibrator.fit(oof, ytr)
+
+    model = make_model()
+    model.fit(Xtr, ytr)
+    score = calibrator.predict(model.predict_proba(test[FEATURE_COLUMNS])[:, 1])
     y = test["y"].values.astype(bool)
 
-    cost, t_chal, t_block = tune_thresholds(y, score, n_test_days)
+    n_train_days = train["timestamp"].dt.normalize().nunique()
+    t_chal, t_block = analytic_thresholds(calibrator.predict(oof), n_train_days)
+    cost = expected_cost(y, score, t_chal, t_block)
     naive_cost = COST_FN * y.sum()  # baseline: approve everything
 
     # Per-variant recall (C2): the honest number — how much of the EVASIVE fraud we catch
@@ -124,7 +153,8 @@ def main():
     print(bias_proxy_review(test, score, t_chal).to_string())
 
     with open("data/model_v0.pkl", "wb") as f:
-        pickle.dump({"model": model, "t_challenge": t_chal, "t_block": t_block,
+        pickle.dump({"model": model, "calibrator": calibrator,
+                     "t_challenge": t_chal, "t_block": t_block,
                      "features": FEATURE_COLUMNS}, f)
     with open("data/metrics_v0.json", "w") as f:
         json.dump(metrics, f, indent=2)

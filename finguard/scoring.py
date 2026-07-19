@@ -33,6 +33,7 @@ class ScoringEngine:
         with open(model_path, "rb") as f:
             bundle = pickle.load(f)
         self.model = bundle["model"]
+        self.calibrator = bundle.get("calibrator")   # C3-2: optional isotonic calibration
         self.t_challenge = bundle["t_challenge"]
         self.t_block = bundle["t_block"]
         self.store = store or InMemoryFeatureStore()
@@ -64,6 +65,8 @@ class ScoringEngine:
         x = np.array([[feats[c] for c in FEATURE_COLUMNS]])
         # booster.predict avoids sklearn's per-call feature-name validation on the hot path
         risk = float(self.booster.predict(x)[0])
+        if self.calibrator is not None:
+            risk = float(self.calibrator.predict([risk])[0])
 
         held = self._is_held(txn)
         if risk >= self.t_block:

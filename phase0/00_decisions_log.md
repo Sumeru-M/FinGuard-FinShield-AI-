@@ -19,3 +19,8 @@ Every entry is binding on all roles until explicitly revised by the owner.
 | D-013 | 2026-07-18 | Phase 0 (card payments) | **CLOSED** — all exit criteria met; Phase 1 (card payments) unblocked | Locked |
 | D-014 | 2026-07-18 | Phase 1 kickoff | Approved as proposed: 6 workstreams, GBT model family, Python/FastAPI/Redis/Kafka pilot stack, dependency-driven build order starting WS-1 | Locked |
 | D-015 | 2026-07-19 | Cycle 2 direction | "Red team then harden": adversarial data v2, honest retrain, investigation-hold state, experiment tracking. Dashboard/infra/federation wait one cycle. P2P Phase 0 framing runs in parallel | Locked |
+| D-016 | 2026-07-19 | Cycle 3 focus | Model quality: score calibration to revive soft-challenge tier + adversarial-robust features targeting evasive CNP (weakest cell, 76.2%) | Locked |
+| D-017 | 2026-07-19 | P2P cost ratio | 10:1 FN:FP working placeholder for APP fraud (unrecoverable, no chargeback); re-derive with data | Locked |
+| D-018 | 2026-07-19 | P2P delayed settlement | Autonomous, inside D-005 boundary: transaction-level and self-reversing (funds auto-release) | Locked |
+| D-019 | 2026-07-19 | Mule detection | Deferred out of P2P v1 to its own AML-focused phase (regulatory adjacency); P2P v1 = APP-scam + ATO | Locked |
+| — | — | P2P still open | Alert-capacity lane (shared vs separate) and recipient-reputation scoring approval — undecided, must close before P2P Phase 1 | Open |
