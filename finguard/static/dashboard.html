@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>FinGuard — Investigator Queue</title>
+<style>
+  :root { --bg:#0f1419; --panel:#1a2129; --line:#2b3540; --text:#e6edf3; --dim:#8b98a5;
+          --red:#f85149; --amber:#d29922; --green:#3fb950; --blue:#58a6ff; }
+  * { box-sizing:border-box; margin:0; }
+  body { background:var(--bg); color:var(--text); font:14px/1.5 -apple-system,'Segoe UI',sans-serif; padding:24px; }
+  h1 { font-size:18px; margin-bottom:4px; }
+  .sub { color:var(--dim); margin-bottom:20px; }
+  .lanes { display:grid; grid-template-columns:1fr 1fr; gap:20px; align-items:start; }
+  .lane h2 { font-size:14px; padding:10px 12px; background:var(--panel);
+             border:1px solid var(--line); border-radius:8px 8px 0 0; }
+  .lane .hint { color:var(--dim); font-weight:normal; font-size:12px; }
+  .alert { border:1px solid var(--line); border-top:0; background:var(--panel); padding:12px; }
+  .alert:last-child { border-radius:0 0 8px 8px; }
+  .row1 { display:flex; justify-content:space-between; align-items:center; margin-bottom:6px; }
+  .txid { font-family:ui-monospace,monospace; color:var(--blue); font-size:12px; }
+  .badge { padding:2px 8px; border-radius:10px; font-size:11px; font-weight:600; }
+  .hard_block { background:#4d1f1f; color:var(--red); }
+  .soft_challenge { background:#4d3a12; color:var(--amber); }
+  .score { font-weight:700; }
+  .feat { display:flex; justify-content:space-between; font-size:12px; color:var(--dim); }
+  .feat b { color:var(--text); font-weight:500; }
+  .bar { height:4px; background:var(--line); border-radius:2px; margin:2px 0 6px; }
+  .bar i { display:block; height:100%; background:var(--blue); border-radius:2px; }
+  .actions { display:flex; gap:6px; margin-top:10px; flex-wrap:wrap; }
+  button { border:1px solid var(--line); background:var(--bg); color:var(--text);
+           border-radius:6px; padding:4px 10px; font-size:12px; cursor:pointer; }
+  button:hover { border-color:var(--blue); }
+  button.legit:hover { border-color:var(--green); color:var(--green); }
+  button.fraud:hover { border-color:var(--red); color:var(--red); }
+  .empty { color:var(--dim); padding:20px; text-align:center; border:1px dashed var(--line);
+           border-radius:0 0 8px 8px; }
+</style>
+</head>
+<body>
+<h1>FinGuard — Investigator Queue</h1>
+<div class="sub">Dispositions feed the model's label loop. Confirming fraud adds device/card reputation; confirming legitimate clears the card's investigation hold.</div>
+<div class="lanes">
+  <section class="lane">
+    <h2>Model-driven alerts <span class="hint">— full review</span></h2>
+    <div id="model-lane"></div>
+  </section>
+  <section class="lane">
+    <h2>Card under investigation <span class="hint">— lighter touch: hold-floored activity on already-flagged cards</span></h2>
+    <div id="hold-lane"></div>
+  </section>
+</div>
+<script>
+const LABELS = [
+  ["confirmed_fraud_cnp", "Fraud: CNP", "fraud"],
+  ["confirmed_fraud_ato", "Fraud: ATO", "fraud"],
+  ["confirmed_fraud_synthetic_card", "Fraud: card testing", "fraud"],
+  ["confirmed_legitimate", "Legitimate", "legit"],
+  ["unresolved", "Unresolved", ""],
+];
+
+function alertCard(a) {
+  const feats = a.top_features.map(f => `
+    <div class="feat"><span>${f.feature_name}</span><b>${f.feature_value}</b></div>
+    <div class="bar"><i style="width:${Math.round(f.contribution_weight * 100)}%"></i></div>`).join("");
+  const btns = LABELS.map(([id, label, cls]) =>
+    `<button class="${cls}" onclick="disposition('${a.alert_id}','${id}')">${label}</button>`).join("");
+  return `<div class="alert" id="${a.alert_id}">
+    <div class="row1">
+      <span class="txid">${a.transaction_id} · ${a.timestamp}</span>
+      <span class="badge ${a.decision}">${a.decision.replace("_", " ")}</span>
+    </div>
+    <div class="row1"><span>Risk <span class="score">${a.risk_score.toFixed(3)}</span></span>
+      <span class="txid">${a.card_id ?? ""}</span></div>
+    ${feats}<div class="actions">${btns}</div></div>`;
+}
+
+async function load() {
+  const alerts = await (await fetch("/alerts?limit=100")).json();
+  const lanes = { model: [], hold: [] };
+  for (const a of alerts) (a.card_under_investigation ? lanes.hold : lanes.model).push(a);
+  for (const [key, id] of [["model", "model-lane"], ["hold", "hold-lane"]]) {
+    document.getElementById(id).innerHTML = lanes[key].length
+      ? lanes[key].map(alertCard).join("")
+      : '<div class="empty">Queue clear</div>';
+  }
+}
+
+async function disposition(alertId, label) {
+  await fetch(`/alerts/${alertId}/disposition/${label}`, { method: "POST" });
+  load();
+}
+load();
+setInterval(load, 15000);
+</script>
+</body>
+</html>

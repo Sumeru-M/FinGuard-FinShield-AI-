@@ -45,7 +45,15 @@ FEATURE_COLUMNS = [
     "merchant_observed_age_days",  # how long WE have seen this merchant
     "device_observed_age_days",    # how long WE have seen this device (vs self-reported)
     "device_alltime_cards",        # distinct cards ever on this device (bot/mule signal)
+    # Cycle 4 (D-020): label-loop feedback — analyst dispositions become features.
+    # Point-in-time correct: a confirmation only becomes visible LABEL_LATENCY after
+    # the fraud event (investigation takes time; no oracle labels at scoring time).
+    "device_confirmed_fraud_links",  # confirmed-fraud events tied to this device
+    "card_prior_confirmed_fraud",    # this card previously confirmed defrauded (victim)
+    "merchant_confirmed_fraud_links",  # confirmed-fraud events at this merchant
 ]
+
+LABEL_LATENCY = pd.Timedelta(hours=24)   # time from fraud event to analyst confirmation
 
 # Human-readable names required by the explainability spec (D-011): the model
 # feature name IS the displayed name — no separate translation layer.
@@ -73,6 +81,9 @@ FEATURE_DISPLAY = {
     "merchant_observed_age_days": "How long this merchant has been observed",
     "device_observed_age_days": "How long this device has been observed",
     "device_alltime_cards": "Total distinct cards seen on this device",
+    "device_confirmed_fraud_links": "Device linked to confirmed fraud",
+    "card_prior_confirmed_fraud": "Card previously confirmed defrauded",
+    "merchant_confirmed_fraud_links": "Merchant linked to confirmed fraud",
 }
 
 
@@ -94,6 +105,22 @@ class InMemoryFeatureStore:
         self.merchant_stats = defaultdict(lambda: [None, 0])      # first_seen_ts, count
         self.device_first_seen = {}                               # device -> ts
         self.device_all_cards = defaultdict(set)                  # device -> {cards}
+        # Cycle 4: label-loop reputation. Each entry: list of timestamps at which a
+        # confirmation BECOMES VISIBLE (event ts + LABEL_LATENCY, or live disposition ts)
+        self.device_fraud_marks = defaultdict(list)
+        self.card_fraud_marks = defaultdict(list)
+        self.merchant_fraud_marks = defaultdict(list)
+
+    def mark_confirmed_fraud(self, institution_id, ts, device_id=None, card_id=None,
+                             merchant_id=None):
+        """Feed an analyst confirmation back into reputation state. `ts` is when the
+        confirmation becomes known (already latency-adjusted by the caller)."""
+        if device_id:
+            self.device_fraud_marks[self._k(institution_id, device_id)].append(ts)
+        if card_id:
+            self.card_fraud_marks[self._k(institution_id, card_id)].append(ts)
+        if merchant_id:
+            self.merchant_fraud_marks[self._k(institution_id, merchant_id)].append(ts)
 
     @staticmethod
     def _k(inst, entity):
@@ -177,6 +204,9 @@ class InMemoryFeatureStore:
         d_first = self.device_first_seen.get(dk)
         d_age = (ts - d_first).total_seconds() / 86400 if d_first is not None else 0.0
         return {
+            "device_confirmed_fraud_links": sum(1 for m in self.device_fraud_marks[dk] if m <= ts),
+            "card_prior_confirmed_fraud": min(sum(1 for m in self.card_fraud_marks[ck] if m <= ts), 5),
+            "merchant_confirmed_fraud_links": sum(1 for m in self.merchant_fraud_marks[mk] if m <= ts),
             "hour_dev_from_card_mean": float(hour_dev),
             "amount_zscore_card": float(min(z, 20.0)),
             "merchant_txn_count_log": float(np.log1p(m_count)),
@@ -219,6 +249,13 @@ def build_feature_frame(df: pd.DataFrame) -> pd.DataFrame:
     for t in df.sort_values("timestamp").itertuples(index=False):
         rows.append(store.features_for(t))
         store.update(t)
+        # Simulated label loop: confirmed fraud becomes reputation LABEL_LATENCY later.
+        # (Optimistic: assumes every fraud row is eventually confirmed — in production
+        # only alerted/disputed fraud gets a disposition; noted in Cycle 4 report.)
+        if t.label != "confirmed_legitimate":
+            vis = t.timestamp + LABEL_LATENCY
+            store.mark_confirmed_fraud(t.institution_id, vis, device_id=t.device_id,
+                                       card_id=t.card_id, merchant_id=t.merchant_id)
     feats = pd.DataFrame(rows, columns=FEATURE_COLUMNS)
     out = df.sort_values("timestamp").reset_index(drop=True)
     meta_cols = ["transaction_id", "timestamp", "card_id", "label"] + \

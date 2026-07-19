@@ -207,6 +207,12 @@ def create_app():
             queue.push(result["alert"])
         return result
 
+    @app.get("/dashboard")
+    def dashboard():
+        from fastapi.responses import FileResponse
+        import os
+        return FileResponse(os.path.join(os.path.dirname(__file__), "static", "dashboard.html"))
+
     @app.get("/alerts")
     def alerts(limit: int = 50):
         return queue.pending(limit)
@@ -218,11 +224,16 @@ def create_app():
         except ValueError as e:
             raise HTTPException(422, str(e))
         hold_cleared = False
+        a = queue.get(alert_id)
         if label == "confirmed_legitimate":
-            a = queue.get(alert_id)
             if a and "card_id" in a:
                 engine.clear_hold(a["institution_id"], a["card_id"])
                 hold_cleared = True
+        elif label.startswith("confirmed_fraud") and a and "card_id" in a:
+            # C4 label loop: confirmed fraud feeds reputation features immediately
+            engine.store.mark_confirmed_fraud(
+                a["institution_id"], pd.Timestamp(a["timestamp"]),
+                card_id=a["card_id"])
         return {"alert_id": alert_id, "disposition": label, "hold_cleared": hold_cleared}
 
     return app
