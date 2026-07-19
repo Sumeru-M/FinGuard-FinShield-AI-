@@ -30,3 +30,8 @@ Every entry is binding on all roles until explicitly revised by the owner.
 | D-024 | 2026-07-19 | Recipient reputation | Approved in principle for P2P v1; GATED on data-minimization review before real data (D-009 pattern) | Locked |
 | D-025 | 2026-07-19 | P2P Phase 1 kickoff | Vertical slice: P2P generator (APP-scam + ATO per D-019 scope), sender+recipient features, 10:1 cost model (D-017), delayed-settlement action (D-018), 100/day cap (D-023) | Locked |
 | D-026 | 2026-07-19 | Cycle 8 focus | P2P red-team pass (evasive scam variants: installment coaching, aged mules, sleeper activation) + wire-transfer Phase 0 framing in parallel (docs only) | Locked |
+| D-027 | 2026-07-19 | Wire cost model | Per-dollar expected-loss scoring (fixed review cost + amount-proportional loss terms → amount-dependent hold threshold) | Locked |
+| D-028 | 2026-07-19 | Wire autonomy | Inverted rule: machine may HOLD any wire autonomously; human sign-off required to RELEASE a held wire above $100k | Locked |
+| D-029 | 2026-07-19 | Wire v1 scope | Corporate-first (BEC/invoice manipulation + ATO wires); retail wire scams deferred (reuse P2P APP work later) | Locked |
+| D-030 | 2026-07-19 | Wire AML boundary | Sanctions/AML screening OUT of scope — existing bank systems own it; this system consumes their verdict as an input feature only | Locked |
+| D-031 | 2026-07-19 | Cycle 9 | Wire Phase 1 vertical slice approved (generator, BEC features, per-dollar thresholds, hold/release decisions) | Locked |

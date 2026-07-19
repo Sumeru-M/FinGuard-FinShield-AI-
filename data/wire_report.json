@@ -1,0 +1,20 @@
+{
+  "test_rows": 6704,
+  "test_days": 36,
+  "fraud_rows": 46,
+  "fraud_dollars": 3176054.03,
+  "recall_by_count": 0.9565,
+  "recall_by_value": 0.9869,
+  "precision": 0.1452,
+  "holds_per_day": 8.4,
+  "human_release_queue_per_day": 4.9,
+  "false_holds_per_day": 7.2,
+  "expected_loss_vs_naive": 0.1448,
+  "recall_by_variant": {
+    "bec_blatant": 1.0,
+    "bec_evasive": 1.0,
+    "ato": 0.8667
+  },
+  "largest_missed_wire": 22315.3,
+  "largest_caught_wire": 449054.57
+}
