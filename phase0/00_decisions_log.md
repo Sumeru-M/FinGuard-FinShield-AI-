@@ -26,4 +26,6 @@ Every entry is binding on all roles until explicitly revised by the owner.
 | D-020 | 2026-07-19 | Cycle 4 focus | Label-loop feedback (dispositions → device/card reputation features, 24h label latency) + investigator dashboard with dual lanes (model-driven vs card-under-investigation) | Locked |
 | D-021 | 2026-07-19 | Cycle 5 focus | D-011 alert-format review executed in Fraud-Analyst role on the live dashboard + infra reality check (honest latency under load; Docker/Redis if environment allows) | Locked |
 | D-022 | 2026-07-19 | Cycle 6 focus | Federation phase opens (D-012 fulfilled): multi-institution simulation, model-sharing (never data-sharing) via cross-institution ensemble, out-of-band aggregation per D-004 constraint | Locked |
-| — | — | P2P still open | Alert-capacity lane (shared vs separate) and recipient-reputation scoring approval — undecided, must close before P2P Phase 1 | Open |
+| D-023 | 2026-07-19 | P2P alert lane | Separate P2P investigator lane, 100/day starting budget (APP-scam review is a different skill; no cross-channel starvation) | Locked |
+| D-024 | 2026-07-19 | Recipient reputation | Approved in principle for P2P v1; GATED on data-minimization review before real data (D-009 pattern) | Locked |
+| D-025 | 2026-07-19 | P2P Phase 1 kickoff | Vertical slice: P2P generator (APP-scam + ATO per D-019 scope), sender+recipient features, 10:1 cost model (D-017), delayed-settlement action (D-018), 100/day cap (D-023) | Locked |
