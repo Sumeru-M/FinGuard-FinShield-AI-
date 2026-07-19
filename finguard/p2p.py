@@ -47,6 +47,10 @@ P2P_FEATURES = [
     "recipient_first_time_sender_ratio",  # share of inbound from first-time senders
     "device_mismatch",              # ATO tell (clean for APP scams — that's the point)
     "session_behavior_score",
+    # C8-1 counter-features for the red-team evasions:
+    "pair_cum_amount_7d",           # installments to one recipient ACCUMULATE
+    "pair_txn_count_7d",            # ...and repeat (coached payment cadence)
+    "recipient_inbound_accel",      # sleeper activation: inbound now vs their own past
 ]
 
 P2P_DISPLAY = {
@@ -62,6 +66,9 @@ P2P_DISPLAY = {
     "recipient_first_time_sender_ratio": "Recipient's share of first-time senders",
     "device_mismatch": "Unrecognized device for sender",
     "session_behavior_score": "Behavioral biometric match score",
+    "pair_cum_amount_7d": "Total sent to this recipient in 7 days",
+    "pair_txn_count_7d": "Payments to this recipient in 7 days",
+    "recipient_inbound_accel": "Recipient's inbound surge vs their history",
 }
 
 
@@ -98,36 +105,66 @@ def generate(n_users=3000, n_days=30, seed=42):
     for m in mules:
         account_created[m] = start - pd.Timedelta(days=float(rng.uniform(1, 40)))
 
+    # C8-1 (D-026): sleeper mules — accounts with months of ORDINARY personal use
+    # before activation. They defeat account-age and clean-history heuristics.
+    sleepers = [f"u_{i:05d}" for i in rng.choice(n_users, size=25, replace=False)]
+
     n_scams = 120
-    for _ in range(n_scams):                       # APP scams: THE VICTIM PAYS
+    for si in range(n_scams):                      # APP scams: THE VICTIM PAYS
+        evasive = si % 2 == 1                      # 50/50 blatant / evasive
         victim = str(rng.choice(users))
-        mule = str(rng.choice(mules))
         ts = start + pd.Timedelta(days=int(rng.integers(0, n_days)),
                                   hours=int(rng.integers(0, 24)))
-        for k in range(int(rng.integers(1, 4))):   # scammers often coach repeat payments
-            rows.append(dict(
-                timestamp=ts + pd.Timedelta(hours=k * int(rng.integers(1, 12))),
-                sender=victim, recipient=mule,
-                # elevated vs victim's norm, but the victim's own hand: clean device+behavior
-                amount=round(float(rng.lognormal(spend_mu[victim] + 1.5, 0.5)), 2),
-                device_mismatch=0,
-                session_behavior_score=float(np.clip(rng.normal(0.80, 0.10), 0, 1)),
-                label="p2p_app_scam", variant="app",
-            ))
+        if not evasive:
+            mule = str(rng.choice(mules))
+            for k in range(int(rng.integers(1, 4))):
+                rows.append(dict(
+                    timestamp=ts + pd.Timedelta(hours=k * int(rng.integers(1, 12))),
+                    sender=victim, recipient=mule,
+                    # elevated vs victim's norm, but victim's own hand: clean device+behavior
+                    amount=round(float(rng.lognormal(spend_mu[victim] + 1.5, 0.5)), 2),
+                    device_mismatch=0,
+                    session_behavior_score=float(np.clip(rng.normal(0.80, 0.10), 0, 1)),
+                    label="p2p_app_scam", variant="app_blatant",
+                ))
+        else:
+            # Evasive: installment coaching — several payments INSIDE the victim's
+            # normal band, spread over days, to a sleeper mule with real history
+            mule = str(rng.choice(sleepers))
+            for k in range(int(rng.integers(3, 7))):
+                rows.append(dict(
+                    timestamp=ts + pd.Timedelta(days=k, hours=int(rng.integers(9, 21))),
+                    sender=victim, recipient=mule,
+                    amount=round(float(rng.lognormal(spend_mu[victim] + 0.3, 0.4)), 2),
+                    device_mismatch=0,
+                    session_behavior_score=float(np.clip(rng.normal(0.83, 0.09), 0, 1)),
+                    label="p2p_app_scam", variant="app_evasive",
+                ))
 
     n_ato = 40
-    for _ in range(n_ato):                         # ATO: attacker pushes funds out
+    for ai in range(n_ato):                        # ATO: attacker pushes funds out
+        evasive = ai % 2 == 1
         victim = str(rng.choice(users))
-        mule = str(rng.choice(mules))
         ts = start + pd.Timedelta(days=int(rng.integers(0, n_days)),
                                   hours=int(rng.integers(0, 24)))
-        rows.append(dict(
-            timestamp=ts, sender=victim, recipient=mule,
-            amount=round(float(rng.lognormal(spend_mu[victim] + 1.8, 0.4)), 2),
-            device_mismatch=1,
-            session_behavior_score=float(np.clip(rng.normal(0.35, 0.12), 0, 1)),
-            label="p2p_ato_transfer", variant="ato",
-        ))
+        if not evasive:
+            rows.append(dict(
+                timestamp=ts, sender=victim, recipient=str(rng.choice(mules)),
+                amount=round(float(rng.lognormal(spend_mu[victim] + 1.8, 0.4)), 2),
+                device_mismatch=1,
+                session_behavior_score=float(np.clip(rng.normal(0.35, 0.12), 0, 1)),
+                label="p2p_ato_transfer", variant="ato_blatant",
+            ))
+        else:
+            # Evasive ATO: session hijack (no device mismatch), moderate amounts,
+            # paid to a sleeper mule, biometrics only mildly off
+            rows.append(dict(
+                timestamp=ts, sender=victim, recipient=str(rng.choice(sleepers)),
+                amount=round(float(rng.lognormal(spend_mu[victim] + 0.9, 0.4)), 2),
+                device_mismatch=0,
+                session_behavior_score=float(np.clip(rng.normal(0.62, 0.10), 0, 1)),
+                label="p2p_ato_transfer", variant="ato_evasive",
+            ))
 
     df = pd.DataFrame(rows).sort_values("timestamp").reset_index(drop=True)
     df.insert(0, "transfer_id", [f"p2p_{i:07d}" for i in range(len(df))])
@@ -140,6 +177,9 @@ def build_features(df, account_created):
     sender_hist = defaultdict(list)          # sender -> (ts, amount)
     sender_new_recips = defaultdict(list)    # sender -> ts of first-payments
     recip_inbound = defaultdict(list)        # recipient -> (ts, sender, first_time)
+    pair_hist = defaultdict(list)            # (sender, recipient) -> (ts, amount)
+    recip_lifetime_n = defaultdict(int)      # recipient -> lifetime inbound count
+    recip_first_seen = {}                    # recipient -> first inbound ts
 
     rows = []
     for t in df.itertuples(index=False):
@@ -167,6 +207,7 @@ def build_features(df, account_created):
                 (sum(f for _, _, f in inb) / len(inb)) if inb else 0.0,
             "device_mismatch": t.device_mismatch,
             "session_behavior_score": t.session_behavior_score,
+            **_c8(t, ts, pair_hist, recip_lifetime_n, recip_first_seen, inb),
         })
         # update state
         sender_hist[t.sender].append((ts, t.amount))
@@ -174,10 +215,31 @@ def build_features(df, account_created):
             sender_new_recips[t.sender].append(ts)
         sender_pairs[t.sender].add(t.recipient)
         recip_inbound[t.recipient].append((ts, t.sender, first_time))
+        pair_hist[(t.sender, t.recipient)].append((ts, t.amount))
+        recip_lifetime_n[t.recipient] += 1
+        recip_first_seen.setdefault(t.recipient, ts)
 
     ff = pd.DataFrame(rows, columns=P2P_FEATURES)
     return pd.concat([df[["transfer_id", "timestamp", "label", "variant"]]
                       .reset_index(drop=True), ff], axis=1)
+
+
+def _c8(t, ts, pair_hist, recip_lifetime_n, recip_first_seen, inb):
+    """Counter-features for the red-team evasions (state read pre-update)."""
+    ph = [(a, s) for a, s in pair_hist[(t.sender, t.recipient)]
+          if a >= ts - pd.Timedelta(days=7)]
+    # Recipient's inbound rate now (30d window, from `inb`) vs their lifetime rate.
+    # A sleeper looks ordinary on account age but not on their own trend.
+    first = recip_first_seen.get(t.recipient)
+    life_days = max((ts - first).days, 1) if first is not None else 1
+    lifetime_rate = recip_lifetime_n[t.recipient] / life_days
+    recent_rate = len(inb) / 30.0
+    accel = recent_rate / max(lifetime_rate, 1e-3)
+    return {
+        "pair_cum_amount_7d": float(sum(s for _, s in ph)),
+        "pair_txn_count_7d": len(ph),
+        "recipient_inbound_accel": float(min(accel, 50.0)),
+    }
 
 
 def analytic_thresholds(oof, n_days):
@@ -236,6 +298,11 @@ def main():
         "recall_by_type": {
             k: round(float((te[te.label == k].index.isin(te.index[alerted])).mean()), 4)
             for k in ["p2p_app_scam", "p2p_ato_transfer"]
+        },
+        "recall_by_variant": {
+            v: round(float((te[te.variant == v].index.isin(te.index[alerted])).mean()), 4)
+            for v in ["app_blatant", "app_evasive", "ato_blatant", "ato_evasive"]
+            if (te.variant == v).any()
         },
         "hold_tier_used": bool(held.sum() > 0),
     }

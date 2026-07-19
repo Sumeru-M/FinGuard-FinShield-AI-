@@ -29,3 +29,4 @@ Every entry is binding on all roles until explicitly revised by the owner.
 | D-023 | 2026-07-19 | P2P alert lane | Separate P2P investigator lane, 100/day starting budget (APP-scam review is a different skill; no cross-channel starvation) | Locked |
 | D-024 | 2026-07-19 | Recipient reputation | Approved in principle for P2P v1; GATED on data-minimization review before real data (D-009 pattern) | Locked |
 | D-025 | 2026-07-19 | P2P Phase 1 kickoff | Vertical slice: P2P generator (APP-scam + ATO per D-019 scope), sender+recipient features, 10:1 cost model (D-017), delayed-settlement action (D-018), 100/day cap (D-023) | Locked |
+| D-026 | 2026-07-19 | Cycle 8 focus | P2P red-team pass (evasive scam variants: installment coaching, aged mules, sleeper activation) + wire-transfer Phase 0 framing in parallel (docs only) | Locked |
