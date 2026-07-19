@@ -24,4 +24,5 @@ Every entry is binding on all roles until explicitly revised by the owner.
 | D-018 | 2026-07-19 | P2P delayed settlement | Autonomous, inside D-005 boundary: transaction-level and self-reversing (funds auto-release) | Locked |
 | D-019 | 2026-07-19 | Mule detection | Deferred out of P2P v1 to its own AML-focused phase (regulatory adjacency); P2P v1 = APP-scam + ATO | Locked |
 | D-020 | 2026-07-19 | Cycle 4 focus | Label-loop feedback (dispositions → device/card reputation features, 24h label latency) + investigator dashboard with dual lanes (model-driven vs card-under-investigation) | Locked |
+| D-021 | 2026-07-19 | Cycle 5 focus | D-011 alert-format review executed in Fraud-Analyst role on the live dashboard + infra reality check (honest latency under load; Docker/Redis if environment allows) | Locked |
 | — | — | P2P still open | Alert-capacity lane (shared vs separate) and recipient-reputation scoring approval — undecided, must close before P2P Phase 1 | Open |

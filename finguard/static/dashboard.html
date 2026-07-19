@@ -59,9 +59,16 @@ const LABELS = [
 ];
 
 function alertCard(a) {
-  const feats = a.top_features.map(f => `
+  const feats = (a.top_features ?? []).map(f => `
     <div class="feat"><span>${f.feature_name}</span><b>${f.feature_value}</b></div>
     <div class="bar"><i style="width:${Math.round(f.contribution_weight * 100)}%"></i></div>`).join("");
+  const t = a.transaction;
+  const txnRow = t ? `<div class="feat" style="margin-bottom:8px">
+      <span><b>$${t.amount.toFixed(2)}</b> · ${t.merchant_category} · ${t.merchant_id}</span>
+      <span>${t.country} · ${t.channel}</span></div>` : "";
+  const reason = a.alert_reason === "card_under_investigation"
+    ? `<div class="feat" style="margin-bottom:6px"><span>⚠ Activity on a card already under
+       investigation — model risk on this transaction itself is low</span></div>` : "";
   const btns = LABELS.map(([id, label, cls]) =>
     `<button class="${cls}" onclick="disposition('${a.alert_id}','${id}')">${label}</button>`).join("");
   return `<div class="alert" id="${a.alert_id}">
@@ -71,13 +78,13 @@ function alertCard(a) {
     </div>
     <div class="row1"><span>Risk <span class="score">${a.risk_score.toFixed(3)}</span></span>
       <span class="txid">${a.card_id ?? ""}</span></div>
-    ${feats}<div class="actions">${btns}</div></div>`;
+    ${txnRow}${reason}${feats}<div class="actions">${btns}</div></div>`;
 }
 
 async function load() {
   const alerts = await (await fetch("/alerts?limit=100")).json();
   const lanes = { model: [], hold: [] };
-  for (const a of alerts) (a.card_under_investigation ? lanes.hold : lanes.model).push(a);
+  for (const a of alerts) (a.alert_reason === "card_under_investigation" ? lanes.hold : lanes.model).push(a);
   for (const [key, id] of [["model", "model-lane"], ["hold", "hold-lane"]]) {
     document.getElementById(id).innerHTML = lanes[key].length
       ? lanes[key].map(alertCard).join("")

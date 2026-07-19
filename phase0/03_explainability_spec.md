@@ -1,4 +1,12 @@
 # Explainability Spec — Card Payments
+**AMENDED per D-011 analyst review (Cycle 5, 2026-07-19), format now FROZEN:**
+1. Alert carries a `transaction` context block (amount, merchant, category, country,
+   channel) — analysts judge plausibility from the transaction itself, not features alone.
+2. `alert_reason` field distinguishes `model_risk` vs `card_under_investigation`;
+   hold-floored alerts omit SHAP attributions (a low-score attribution would explain
+   "why this is NOT fraud" — misleading).
+3. `confidence` field removed (|risk-0.5|·2 semantics were misleading on hold alerts).
+4. Day/money-denominated feature values carry units ("2.3 days", "$32.67").
 **Roles: AI/ML Engineer (#1) + Platform Engineer (#9) + Fraud Analyst (#10) | Phase 0, Deliverable 3**
 
 ## Format decision

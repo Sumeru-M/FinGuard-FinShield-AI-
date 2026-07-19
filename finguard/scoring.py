@@ -27,6 +27,18 @@ DB_PATH = "data/alerts.db"
 
 HOLD_TTL = pd.Timedelta(hours=48)
 
+# D-011 analyst-review fixes (Cycle 5): units for day/money-denominated features
+UNIT_DAYS = {"device_age_days", "device_observed_age_days", "merchant_observed_age_days"}
+UNIT_MONEY = {"amount", "amount_sum_24h"}
+
+
+def _fmt_value(col: str, v: float) -> str:
+    if col in UNIT_DAYS:
+        return f"{v:.1f} days"
+    if col in UNIT_MONEY:
+        return f"${v:,.2f}"
+    return str(round(float(v), 4))
+
 
 class ScoringEngine:
     def __init__(self, model_path="data/model_v0.pkl", store=None):
@@ -85,26 +97,24 @@ class ScoringEngine:
         }
 
         if decision != "approve":
-            # SHAP attribution only on the alert path — approves don't pay for it
-            contrib = self.booster.predict(x, pred_contrib=True)[0][:-1]  # last col = bias
-            order = np.argsort(-np.abs(contrib))
-            total = np.abs(contrib).sum() or 1.0
-            top = [
-                {
-                    "feature_name": FEATURE_DISPLAY[FEATURE_COLUMNS[i]],
-                    "contribution_weight": round(float(abs(contrib[i]) / total), 4),
-                    "feature_value": str(round(float(feats[FEATURE_COLUMNS[i]]), 4)),
-                }
-                for i in order[:7] if abs(contrib[i]) / total >= 0.02
-            ][:7]
-            top = top if len(top) >= 3 else [
-                {
-                    "feature_name": FEATURE_DISPLAY[FEATURE_COLUMNS[i]],
-                    "contribution_weight": round(float(abs(contrib[i]) / total), 4),
-                    "feature_value": str(round(float(feats[FEATURE_COLUMNS[i]]), 4)),
-                }
-                for i in order[:3]
-            ]
+            model_driven = risk >= self.t_challenge
+            # D-011 review: SHAP attributions only justify MODEL-driven alerts. On a
+            # hold-floored alert the score is low and attributions would "explain why
+            # this is NOT fraud" — misleading, so they are omitted there.
+            top = []
+            if model_driven:
+                contrib = self.booster.predict(x, pred_contrib=True)[0][:-1]  # last col = bias
+                order = np.argsort(-np.abs(contrib))
+                total = np.abs(contrib).sum() or 1.0
+                keep = [i for i in order[:7] if abs(contrib[i]) / total >= 0.02] or list(order[:3])
+                top = [
+                    {
+                        "feature_name": FEATURE_DISPLAY[FEATURE_COLUMNS[i]],
+                        "contribution_weight": round(float(abs(contrib[i]) / total), 4),
+                        "feature_value": _fmt_value(FEATURE_COLUMNS[i], feats[FEATURE_COLUMNS[i]]),
+                    }
+                    for i in keep[:7]
+                ]
             result["alert"] = {
                 "alert_id": f"alert_{txn.transaction_id}",
                 "transaction_id": txn.transaction_id,
@@ -113,9 +123,17 @@ class ScoringEngine:
                 "timestamp": str(txn.timestamp),
                 "risk_score": round(risk, 6),
                 "decision": decision,
+                # D-011 review: analysts need the transaction itself, not just features
+                "transaction": {
+                    "amount": txn.amount,
+                    "merchant_id": txn.merchant_id,
+                    "merchant_category": txn.merchant_category,
+                    "country": txn.country,
+                    "channel": txn.channel,
+                },
+                "alert_reason": "model_risk" if model_driven else "card_under_investigation",
                 "fraud_type_prediction": "unscored_v0",  # typed prediction is a v1 model iteration
                 "top_features": top,
-                "confidence": round(abs(risk - 0.5) * 2, 4),
                 "card_under_investigation": held,
             }
             # Only model-driven alerts set/refresh the hold — a hold-floored alert must
