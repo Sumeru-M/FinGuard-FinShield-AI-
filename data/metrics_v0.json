@@ -1,0 +1,19 @@
+{
+  "test_rows": 30585,
+  "test_days": 10,
+  "test_fraud_rows": 66,
+  "t_challenge": 1.0,
+  "t_block": 1.0,
+  "recall_at_alert": 0.803030303030303,
+  "precision_at_alert": 0.6385542168674698,
+  "alerts_per_day": 8.3,
+  "hard_blocks_per_day": 8.3,
+  "false_block_rate": 0.000982994200334218,
+  "expected_cost": 95.0,
+  "naive_cost": 330.0,
+  "cost_vs_naive": 0.2878787878787879,
+  "recall_by_variant": {
+    "blatant": 0.9473684210526315,
+    "evasive": 0.7446808510638298
+  }
+}
