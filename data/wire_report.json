@@ -1,23 +1,104 @@
 {
-  "test_rows": 7498,
-  "test_days": 37,
-  "fraud_rows": 85,
-  "fraud_dollars": 6001092.64,
-  "recall_by_count": 0.9765,
-  "recall_by_value": 0.9983,
-  "precision": 0.0582,
-  "holds_per_day": 38.5,
-  "human_release_queue_per_day": 3.0,
-  "false_holds_per_day": 36.3,
-  "expected_loss_vs_naive": 0.1359,
+  "test_rows": 6974,
+  "test_days": 39,
+  "fraud_rows": 233,
+  "fraud_dollars": 14998241.65,
+  "recall_by_count": 0.9871,
+  "recall_by_value": 0.9977,
+  "precision": 0.1997,
+  "holds_per_day": 29.5,
+  "human_release_queue_per_day": 1.6,
+  "false_holds_per_day": 23.6,
+  "expected_loss_vs_naive": 0.1104,
   "recall_by_variant": {
-    "bec_blatant": 1.0,
-    "bec_evasive": 0.9167,
-    "bec_establish": 0.9333,
-    "bec_fake_vendor": 1.0,
-    "ato_blatant": 1.0,
-    "ato_structuring": 1.0
+    "bec_blatant": {
+      "recall": 1.0,
+      "n": 29
+    },
+    "bec_evasive": {
+      "recall": 1.0,
+      "n": 18
+    },
+    "bec_establish_test": {
+      "recall": null,
+      "n": 0
+    },
+    "bec_establish_strike": {
+      "recall": 1.0,
+      "n": 37
+    },
+    "bec_establish_slow_test": {
+      "recall": 1.0,
+      "n": 6
+    },
+    "bec_establish_slow_strike": {
+      "recall": 0.8125,
+      "n": 16
+    },
+    "bec_fake_vendor": {
+      "recall": 1.0,
+      "n": 20
+    },
+    "ato_blatant": {
+      "recall": 1.0,
+      "n": 19
+    },
+    "ato_structuring": {
+      "recall": 1.0,
+      "n": 60
+    },
+    "ato_structuring_slow": {
+      "recall": 1.0,
+      "n": 28
+    }
   },
-  "largest_missed_wire": 7945.81,
-  "largest_caught_wire": 1597209.93
+  "largest_missed_wire": 26165.64,
+  "largest_caught_wire": 1597209.93,
+  "ablation_no_email_behavior_device": {
+    "recall_by_count": 0.9828,
+    "recall_by_value": 0.9966,
+    "false_holds_per_day": 23.2,
+    "recall_by_variant": {
+      "bec_blatant": {
+        "recall": 1.0,
+        "n": 29
+      },
+      "bec_evasive": {
+        "recall": 0.9444,
+        "n": 18
+      },
+      "bec_establish_test": {
+        "recall": null,
+        "n": 0
+      },
+      "bec_establish_strike": {
+        "recall": 1.0,
+        "n": 37
+      },
+      "bec_establish_slow_test": {
+        "recall": 0.8333,
+        "n": 6
+      },
+      "bec_establish_slow_strike": {
+        "recall": 0.875,
+        "n": 16
+      },
+      "bec_fake_vendor": {
+        "recall": 1.0,
+        "n": 20
+      },
+      "ato_blatant": {
+        "recall": 1.0,
+        "n": 19
+      },
+      "ato_structuring": {
+        "recall": 1.0,
+        "n": 60
+      },
+      "ato_structuring_slow": {
+        "recall": 1.0,
+        "n": 28
+      }
+    }
+  }
 }

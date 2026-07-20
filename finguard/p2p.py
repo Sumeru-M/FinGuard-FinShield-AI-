@@ -243,13 +243,12 @@ def _c8(t, ts, pair_hist, recip_lifetime_n, recip_first_seen, inb):
 
 
 def analytic_thresholds(oof, n_days):
-    # hold beats approve at p > t_hold ; block beats hold at p > t_block
-    t_hold = COST_FP_HOLD / (COST_FN - COST_FRAUD_HOLD + COST_FP_HOLD)
-    t_block = (COST_FP_BLOCK - COST_FP_HOLD) / (COST_FP_BLOCK - COST_FP_HOLD + COST_FRAUD_HOLD)
-    if (oof >= t_hold).sum() / n_days > ALERT_CAP_PER_DAY:
-        k = int(ALERT_CAP_PER_DAY * n_days)
-        t_hold = float(np.sort(oof)[-k])
-    return float(t_hold), float(max(t_block, t_hold))
+    # C12: shared mechanics from core; P2P cost constants (D-017), cap (D-023)
+    from finguard.core import apply_alert_cap, graduated_thresholds
+    t_hold, t_block = graduated_thresholds(COST_FN, COST_FRAUD_HOLD,
+                                           COST_FP_BLOCK, COST_FP_HOLD)
+    t_hold = apply_alert_cap(t_hold, oof, n_days, ALERT_CAP_PER_DAY)
+    return t_hold, float(max(t_block, t_hold))
 
 
 def main():
@@ -260,22 +259,14 @@ def main():
     cutoff = days.unique()[int(len(days.unique()) * 0.7)]
     tr, te = ff[days < cutoff], ff[days >= cutoff]
 
+    from finguard.core import score_calibrated, train_calibrated
     X, y = tr[P2P_FEATURES], tr["y"].values
-    oof = np.zeros(len(tr))
-    for a, b in StratifiedKFold(5, shuffle=True, random_state=42).split(X, y):
-        m = lgb.LGBMClassifier(n_estimators=300, learning_rate=0.05, num_leaves=31,
-                               scale_pos_weight=COST_FN, random_state=42, verbose=-1)
-        m.fit(X.iloc[a], y[a])
-        oof[b] = m.predict_proba(X.iloc[b])[:, 1]
-    cal = IsotonicRegression(out_of_bounds="clip", y_min=0, y_max=1).fit(oof, y)
-    model = lgb.LGBMClassifier(n_estimators=300, learning_rate=0.05, num_leaves=31,
-                               scale_pos_weight=COST_FN, random_state=42, verbose=-1)
-    model.fit(X, y)
+    model, cal, oof_cal = train_calibrated(X, y, scale_pos_weight=COST_FN)
 
     n_tr_days = tr["timestamp"].dt.normalize().nunique()
-    t_hold, t_block = analytic_thresholds(cal.predict(oof), n_tr_days)
+    t_hold, t_block = analytic_thresholds(oof_cal, n_tr_days)
 
-    score = cal.predict(model.predict_proba(te[P2P_FEATURES])[:, 1])
+    score = score_calibrated(model, cal, te[P2P_FEATURES])
     yb = te["y"].values.astype(bool)
     n_days_te = te["timestamp"].dt.normalize().nunique()
     alerted, blocked = score >= t_hold, score >= t_block

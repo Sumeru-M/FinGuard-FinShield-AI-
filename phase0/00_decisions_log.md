@@ -37,3 +37,8 @@ Every entry is binding on all roles until explicitly revised by the owner.
 | D-031 | 2026-07-19 | Cycle 9 | Wire Phase 1 vertical slice approved (generator, BEC features, per-dollar thresholds, hold/release decisions) | Locked |
 | D-032 | 2026-07-19 | Cycle 10 | Wire red-team: account-establishment BEC, fake-vendor onboarding, structuring ATO (sub-$100k sizing) + counter-features | Locked |
 | D-033 | 2026-07-20 | Team structure v2 | 11 role subagents instantiated in `.claude/agents/` (charter in `_TEAM.md`); agents report to Team Lead session, Team Lead reports to owner; owner-gated decisions unchanged | Locked |
+| D-034 | 2026-07-20 | Cycle 11 | Wire hardening v2 per analyst backlog: bigger eval cells, counter-feature window attacks, establishment test/strike split, email+behavior ablation, maker-checker review gate | Locked |
+| D-035 | 2026-07-20 | Wire beneficiary control | APPROVED: mandatory cooling-off + cumulative-dollar cap on new beneficiary accounts until callback/CoP verification (closes establishment frontier; implementation next wire cycle) | Locked |
+| D-036 | 2026-07-20 | Sub-$100k release policy | Dual-control release: second-analyst co-sign required to release any held wire (closes hostile-analyst poisoning path) | Locked |
+| D-037 | 2026-07-20 | Sanctions feed auth | Spec now (Cybersecurity), build at real integration | Locked |
+| D-038 | 2026-07-20 | Cycle 12 | Consolidation: shared core library, test suite from harness gates, README/architecture docs. Parallel agent work: Cybersecurity (D-037 spec), PM (docs) | Locked |

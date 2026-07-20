@@ -52,21 +52,14 @@ def build_institution(cfg) -> dict:
 
 
 def train_local(inst) -> dict:
-    """Local training + OOF isotonic calibration (same recipe as the main pipeline)."""
+    """Local training via the shared core recipe (C12) — entirely institution-local."""
+    from finguard.core import train_calibrated
     tr = inst["train"]
-    X, y = tr[FEATURE_COLUMNS], tr["y"].values
-    oof = np.zeros(len(tr))
-    for tr_i, va_i in StratifiedKFold(5, shuffle=True, random_state=42).split(X, y):
-        m = lgb.LGBMClassifier(n_estimators=400, learning_rate=0.05, num_leaves=63,
-                               scale_pos_weight=COST_FN, random_state=42, verbose=-1)
-        m.fit(X.iloc[tr_i], y[tr_i])
-        oof[va_i] = m.predict_proba(X.iloc[va_i])[:, 1]
-    cal = IsotonicRegression(out_of_bounds="clip", y_min=0, y_max=1).fit(oof, y)
-    model = lgb.LGBMClassifier(n_estimators=400, learning_rate=0.05, num_leaves=63,
-                               scale_pos_weight=COST_FN, random_state=42, verbose=-1)
-    model.fit(X, y)
+    model, cal, oof_cal = train_calibrated(
+        tr[FEATURE_COLUMNS], tr["y"].values,
+        scale_pos_weight=COST_FN, n_estimators=400, num_leaves=63)
     n_days = tr["timestamp"].dt.normalize().nunique()
-    t_chal, t_block = analytic_thresholds(cal.predict(oof), n_days)
+    t_chal, t_block = analytic_thresholds(oof_cal, n_days)
     # The ONLY artifact that may leave the institution:
     return {"model": model, "calibrator": cal, "t_chal": t_chal, "t_block": t_block}
 

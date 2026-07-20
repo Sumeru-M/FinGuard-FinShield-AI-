@@ -132,7 +132,8 @@ def generate(n_orgs=400, n_days=120, seed=42):
 
     orgs = list(org_suppliers)
     # BEC: attacker impersonates a KNOWN supplier; payment goes to a NEW account.
-    for bi in range(60):
+    # (C11: count grown for cell size.)
+    for bi in range(120):
         evasive = bi % 2 == 1
         org = str(rng.choice(orgs))
         sup = org_suppliers[org][rng.integers(0, len(org_suppliers[org]))]
@@ -163,10 +164,61 @@ def generate(n_orgs=400, n_days=120, seed=42):
                 label="wire_bec", variant="bec_evasive",
             ))
 
+    # C11 (D-034): window attacks — evasions aimed at the counter-features' fixed
+    # 7d/24h windows and the amount-over-account-max ratio.
+    # Slow establishment: MULTIPLE test payments spaced >7d apart, shrinking the
+    # strike ratio and never tripping payer_new_accounts_7d twice in a window.
+    for _ in range(30):
+        org = str(rng.choice(orgs))
+        sup = org_suppliers[org][rng.integers(0, len(org_suppliers[org]))]
+        t0 = start + pd.Timedelta(days=int(rng.integers(45, n_days - 40)),
+                                  hours=int(rng.integers(9, 17)))
+        acct = f"acct_{rng.integers(0, 10**8):08d}"
+        n_tests = int(rng.integers(2, 4))
+        for k in range(n_tests):   # escalating test payments, 8-12 days apart
+            rows.append(dict(
+                timestamp=t0 + pd.Timedelta(days=k * int(rng.integers(8, 13))),
+                payer=org, supplier=sup["supplier"],
+                beneficiary_account=acct, beneficiary_country=sup["country"],
+                amount=round(float(rng.lognormal(sup["amount_mu"] - 1.0 + 0.4 * k, 0.3)), 2),
+                is_email_initiated=int(rng.random() < 0.55),
+                device_mismatch=0,
+                session_behavior_score=float(np.clip(rng.normal(0.85, 0.07), 0, 1)),
+                label="wire_bec", variant="bec_establish_slow_test",
+            ))
+        rows.append(dict(   # the strike: only ~2-3x the last test payment
+            timestamp=t0 + pd.Timedelta(days=n_tests * 10 + int(rng.integers(5, 10))),
+            payer=org, supplier=sup["supplier"],
+            beneficiary_account=acct, beneficiary_country=sup["country"],
+            amount=round(float(rng.lognormal(sup["amount_mu"] + 0.3, 0.25)), 2),
+            is_email_initiated=int(rng.random() < 0.55),
+            device_mismatch=0,
+            session_behavior_score=float(np.clip(rng.normal(0.85, 0.07), 0, 1)),
+            label="wire_bec", variant="bec_establish_slow_strike",
+        ))
+
+    # Slow structuring: sub-$100k wires spread >24h apart over several days
+    for _ in range(20):
+        org = str(rng.choice(orgs))
+        t0 = start + pd.Timedelta(days=int(rng.integers(45, n_days - 8)),
+                                  hours=int(rng.integers(9, 17)))
+        for k in range(int(rng.integers(3, 6))):
+            rows.append(dict(
+                timestamp=t0 + pd.Timedelta(days=k, hours=int(rng.integers(1, 8))),
+                payer=org, supplier=f"unknown_{rng.integers(0, 10**4):04d}",
+                beneficiary_account=f"acct_{rng.integers(0, 10**8):08d}",
+                beneficiary_country="US",
+                amount=round(float(rng.uniform(88_000, 99_000)), 2),
+                is_email_initiated=0, device_mismatch=0,
+                session_behavior_score=float(np.clip(rng.normal(0.62, 0.10), 0, 1)),
+                label="wire_ato", variant="ato_structuring_slow",
+            ))
+
     # C10 (D-032): account-establishment BEC — attacker "verifies" the fake account
     # with a small on-cycle test invoice, waits ~1 cycle, then hits the real one.
     # By the big payment, the account has observed history and isn't "new".
-    for _ in range(25):
+    # C11: counts grown for cell size; test/strike split per analyst backlog.
+    for _ in range(60):
         org = str(rng.choice(orgs))
         sup = org_suppliers[org][rng.integers(0, len(org_suppliers[org]))]
         t0 = start + pd.Timedelta(days=int(rng.integers(45, n_days - 35)),
@@ -178,7 +230,7 @@ def generate(n_orgs=400, n_days=120, seed=42):
             amount=round(float(rng.lognormal(sup["amount_mu"] - 1.0, 0.3)), 2),
             is_email_initiated=1, device_mismatch=0,
             session_behavior_score=float(np.clip(rng.normal(0.85, 0.07), 0, 1)),
-            label="wire_bec", variant="bec_establish",
+            label="wire_bec", variant="bec_establish_test",
         ))
         rows.append(dict(   # the strike: full invoice amount, ~one cycle later
             timestamp=t0 + pd.Timedelta(days=int(sup["cycle_days"]) + int(rng.integers(-2, 3)),
@@ -188,12 +240,12 @@ def generate(n_orgs=400, n_days=120, seed=42):
             amount=round(float(rng.lognormal(sup["amount_mu"] + 0.2, 0.25)), 2),
             is_email_initiated=1, device_mismatch=0,
             session_behavior_score=float(np.clip(rng.normal(0.85, 0.07), 0, 1)),
-            label="wire_bec", variant="bec_establish",
+            label="wire_bec", variant="bec_establish_strike",
         ))
 
     # C10: fake-vendor onboarding — a wholly new "supplier" that never existed.
-    # Hides inside the legitimate new-supplier false-hold population.
-    for _ in range(20):
+    # Hides inside the legitimate new-supplier false-hold population. (C11: count grown.)
+    for _ in range(50):
         org = str(rng.choice(orgs))
         rows.append(dict(
             timestamp=start + pd.Timedelta(days=int(rng.integers(45, n_days)),
@@ -209,7 +261,8 @@ def generate(n_orgs=400, n_days=120, seed=42):
 
     # ATO wires — blatant, plus C10 structuring variant: several wires each sized
     # BELOW the $100k human-release line, spread over hours, to distinct accounts.
-    for ai in range(30):
+    # (C11: count grown for cell size.)
+    for ai in range(70):
         org = str(rng.choice(orgs))
         ts = start + pd.Timedelta(days=int(rng.integers(45, n_days)),
                                   hours=int(rng.integers(0, 24)))
@@ -306,6 +359,11 @@ def build_features(df):
                       ff], axis=1)
 
 
+VARIANTS = ["bec_blatant", "bec_evasive", "bec_establish_test", "bec_establish_strike",
+            "bec_establish_slow_test", "bec_establish_slow_strike", "bec_fake_vendor",
+            "ato_blatant", "ato_structuring", "ato_structuring_slow"]
+
+
 def hold_threshold(amount: np.ndarray) -> np.ndarray:
     """D-027 amount-dependent threshold: hold when p > (D·A + REVIEW) / ((1-R+D)·A)."""
     return (D_FRAC * amount + REVIEW_COST) / ((1 - R_FRAC + D_FRAC) * amount)
@@ -319,19 +377,11 @@ def main():
     cutoff = days.unique()[int(len(days.unique()) * 0.7)]
     tr, te = ff[days < cutoff], ff[days >= cutoff]
 
+    from finguard.core import score_calibrated, train_calibrated
     X, y = tr[WIRE_FEATURES], tr["y"].values
-    oof = np.zeros(len(tr))
-    for a, b in StratifiedKFold(5, shuffle=True, random_state=42).split(X, y):
-        m = lgb.LGBMClassifier(n_estimators=300, learning_rate=0.05, num_leaves=31,
-                               scale_pos_weight=20, random_state=42, verbose=-1)
-        m.fit(X.iloc[a], y[a])
-        oof[b] = m.predict_proba(X.iloc[b])[:, 1]
-    cal = IsotonicRegression(out_of_bounds="clip", y_min=0, y_max=1).fit(oof, y)
-    model = lgb.LGBMClassifier(n_estimators=300, learning_rate=0.05, num_leaves=31,
-                               scale_pos_weight=20, random_state=42, verbose=-1)
-    model.fit(X, y)
+    model, cal, _ = train_calibrated(X, y, scale_pos_weight=20)
 
-    p = cal.predict(model.predict_proba(te[WIRE_FEATURES])[:, 1])
+    p = score_calibrated(model, cal, te[WIRE_FEATURES])
     amt = te["amt"].values
     yb = te["y"].values.astype(bool)
     held = p > hold_threshold(amt)
@@ -353,21 +403,47 @@ def main():
         "human_release_queue_per_day": round(float(human_queue.sum() / n_days_te), 1),
         "false_holds_per_day": round(float((~yb & held).sum() / n_days_te), 1),
         "expected_loss_vs_naive": round(loss / loss_naive, 4),
+        # F4: n=0 cells reported explicitly, never silently omitted
         "recall_by_variant": {
-            v: round(float((te[te.variant == v].index.isin(te.index[held])).mean()), 4)
-            for v in ["bec_blatant", "bec_evasive", "bec_establish", "bec_fake_vendor",
-                      "ato_blatant", "ato_structuring"] if (te.variant == v).any()
+            v: {"recall": round(float((te[te.variant == v].index.isin(te.index[held])).mean()), 4)
+                if (te.variant == v).any() else None,
+                "n": int((te.variant == v).sum())}
+            for v in VARIANTS
         },
         "largest_missed_wire": round(float((amt * (yb & ~held)).max()), 2) if (yb & ~held).any() else 0.0,
         "largest_caught_wire": round(float((amt * (yb & held)).max()), 2) if (yb & held).any() else 0.0,
     }
+    # C11 ablation (analyst backlog #1): how much recall depends on the two suspected
+    # lab tells — email initiation and the behavioral score?
+    # Security-review F1: device_mismatch is also a synthetic separator — ablate all 3
+    ABLATED = [f for f in WIRE_FEATURES
+               if f not in ("is_email_initiated", "session_behavior_score",
+                            "device_mismatch")]
+    model_a, cal_a, _ = train_calibrated(tr[ABLATED], y, scale_pos_weight=20)
+    p_a = score_calibrated(model_a, cal_a, te[ABLATED])
+    held_a = p_a > hold_threshold(amt)
+    report["ablation_no_email_behavior_device"] = {
+        "recall_by_count": round(float((yb & held_a).sum() / yb.sum()), 4),
+        "recall_by_value": round(float((amt * (yb & held_a)).sum() / (amt * yb).sum()), 4),
+        "false_holds_per_day": round(float((~yb & held_a).sum() / n_days_te), 1),
+        # F1: per-variant ablation recall so frontier-cell sensitivity is visible
+        "recall_by_variant": {
+            v: {"recall": round(float((te[te.variant == v].index.isin(te.index[held_a])).mean()), 4)
+                if (te.variant == v).any() else None,
+                "n": int((te.variant == v).sum())}
+            for v in VARIANTS
+        },
+    }
+
     print(json.dumps(report, indent=2))
     with open("data/wire_report.json", "w") as f:
         json.dump(report, f, indent=2)
     from finguard.experiments import log_run
+    # F5: tag/params must distinguish generator + ablation code versions
     log_run("wire_train", params={"features": WIRE_FEATURES, "r_frac": R_FRAC,
-                                  "d_frac": D_FRAC, "review_cost": REVIEW_COST},
-            metrics=report, tag="cycle9")
+                                  "d_frac": D_FRAC, "review_cost": REVIEW_COST,
+                                  "variants": VARIANTS, "ablated": ABLATED},
+            metrics=report, tag="cycle11")
 
 
 if __name__ == "__main__":
