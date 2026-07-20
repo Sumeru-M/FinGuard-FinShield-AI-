@@ -35,3 +35,5 @@ Every entry is binding on all roles until explicitly revised by the owner.
 | D-029 | 2026-07-19 | Wire v1 scope | Corporate-first (BEC/invoice manipulation + ATO wires); retail wire scams deferred (reuse P2P APP work later) | Locked |
 | D-030 | 2026-07-19 | Wire AML boundary | Sanctions/AML screening OUT of scope — existing bank systems own it; this system consumes their verdict as an input feature only | Locked |
 | D-031 | 2026-07-19 | Cycle 9 | Wire Phase 1 vertical slice approved (generator, BEC features, per-dollar thresholds, hold/release decisions) | Locked |
+| D-032 | 2026-07-19 | Cycle 10 | Wire red-team: account-establishment BEC, fake-vendor onboarding, structuring ATO (sub-$100k sizing) + counter-features | Locked |
+| D-033 | 2026-07-20 | Team structure v2 | 11 role subagents instantiated in `.claude/agents/` (charter in `_TEAM.md`); agents report to Team Lead session, Team Lead reports to owner; owner-gated decisions unchanged | Locked |
