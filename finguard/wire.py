@@ -34,6 +34,12 @@ R_FRAC = 0.10      # residual loss fraction if fraud is held (mostly recovered)
 D_FRAC = 0.002     # friction cost fraction for delaying a legit wire
 REVIEW_COST = 50.0   # fixed analyst cost per held wire
 HUMAN_RELEASE_ABOVE = 100_000.0   # D-028
+DISCOVERY_LATENCY = pd.Timedelta(days=5)   # C13/F4: BEC is discovered days after the loss;
+# an establishment TEST payment isn't known to be fraud until its STRIKE is investigated.
+NEW_BENEFICIARY_CAP = 25_000.0    # D-035: cumulative $ to a new/changed beneficiary
+# allowed before mandatory cooling-off hold pending callback/CoP verification
+COOLING_OFF_DAYS = 30.0           # D-035: a beneficiary account stays "unverified" (capped)
+# for this long after first payment — long enough that establishment strikes land inside it
 
 WIRE_FEATURES = [
     "amount", "log_amount",
@@ -293,6 +299,21 @@ def generate(n_orgs=400, n_days=120, seed=42):
 
     df = pd.DataFrame(rows).sort_values("timestamp").reset_index(drop=True)
     df.insert(0, "wire_id", [f"wire_{i:06d}" for i in range(len(df))])
+
+    # C13/F4: honest label-availability timing. A fraud row is only usable as a TRAINING
+    # positive once it has been discovered. Ordinary fraud is discovered DISCOVERY_LATENCY
+    # after the loss; an establishment TEST payment is not recognized as fraud until its
+    # own STRIKE is investigated — so it inherits the strike's discovery time.
+    df["discovered_at"] = pd.NaT
+    fraud = df["label"] != "legit"
+    df.loc[fraud, "discovered_at"] = df.loc[fraud, "timestamp"] + DISCOVERY_LATENCY
+    test_v = ["bec_establish_test", "bec_establish_slow_test"]
+    strike_v = ["bec_establish_strike", "bec_establish_slow_strike"]
+    strike_ts = (df[df["variant"].isin(strike_v)]
+                 .groupby("beneficiary_account")["timestamp"].max())
+    for acct, s_ts in strike_ts.items():
+        m = (df["beneficiary_account"] == acct) & df["variant"].isin(test_v)
+        df.loc[m, "discovered_at"] = s_ts + DISCOVERY_LATENCY
     return df
 
 
@@ -305,9 +326,18 @@ def build_features(df):
     payer_amounts = defaultdict(list)    # payer -> (ts, amount)
     account_amounts = defaultdict(list)  # (payer, account) -> amounts paid before
 
+    account_first_seen = {}             # (payer, account) -> first-payment ts
     rows = []
+    controls = []   # D-035 control signals — business rules, NOT model features
     for t in df.itertuples(index=False):
         ts, key = t.timestamp, (t.payer, t.supplier)
+        akey = (t.payer, t.beneficiary_account)
+        prior_to_acct = account_amounts[akey]
+        first_seen = account_first_seen.get(akey, ts)   # this ts if brand new
+        acct_age_days = (ts - first_seen).days
+        cum_to_acct = float(sum(prior_to_acct)) + t.amount   # cumulative incl. this wire
+        controls.append({"benef_account_age_days": float(acct_age_days),
+                         "cumulative_to_account": cum_to_acct})
         hist = pair_hist[key]
         amts = [a for _, a in hist]
         mu, sd = (np.mean(amts), max(np.std(amts), 1.0)) if len(amts) >= 2 else (t.amount, 1.0)
@@ -351,12 +381,14 @@ def build_features(df):
         if new_acct:
             payer_new_accts[t.payer].append(ts)
         payer_amounts[t.payer].append((ts, t.amount))
-        account_amounts[(t.payer, t.beneficiary_account)].append(t.amount)
+        account_amounts[akey].append(t.amount)
+        account_first_seen.setdefault(akey, ts)
 
     ff = pd.DataFrame(rows, columns=WIRE_FEATURES)
-    return pd.concat([df[["wire_id", "timestamp", "amount", "label", "variant"]]
-                      .rename(columns={"amount": "amt"}).reset_index(drop=True),
-                      ff], axis=1)
+    ctrl = pd.DataFrame(controls)
+    meta = df[["wire_id", "timestamp", "amount", "label", "variant", "discovered_at"]] \
+        .rename(columns={"amount": "amt"}).reset_index(drop=True)
+    return pd.concat([meta, ctrl, ff], axis=1)
 
 
 VARIANTS = ["bec_blatant", "bec_evasive", "bec_establish_test", "bec_establish_strike",
@@ -369,24 +401,50 @@ def hold_threshold(amount: np.ndarray) -> np.ndarray:
     return (D_FRAC * amount + REVIEW_COST) / ((1 - R_FRAC + D_FRAC) * amount)
 
 
+def decide(p, amt, acct_age_days, cum_to_acct):
+    """C13 decision layer: model score + D-035 control, D-028 release routing.
+      - model_held: amount-dependent cost-model threshold (D-027)
+      - control_held (D-035): a beneficiary account within its COOLING_OFF_DAYS window
+        is capped at NEW_BENEFICIARY_CAP cumulative $; any wire crossing that is held
+        pending callback/CoP verification. Catches establishment strikes too — the
+        account is still inside its cooling window when the strike lands.
+    Returns (held, control_held, human_queue, dual_control)."""
+    model_held = p > hold_threshold(amt)
+    control_held = (acct_age_days < COOLING_OFF_DAYS) & (cum_to_acct >= NEW_BENEFICIARY_CAP)
+    held = model_held | control_held
+    human_queue = held & (amt > HUMAN_RELEASE_ABOVE)          # D-028: human sign-off
+    dual_control = held & (amt <= HUMAN_RELEASE_ABOVE)        # D-036: 2nd-analyst co-sign
+    return held, control_held, human_queue, dual_control
+
+
 def main():
     df = generate()
     ff = build_features(df)
     ff["y"] = (ff["label"] != "legit").astype(int)
     days = ff["timestamp"].dt.normalize()
     cutoff = days.unique()[int(len(days.unique()) * 0.7)]
+    cutoff_ts = pd.Timestamp(cutoff)
     tr, te = ff[days < cutoff], ff[days >= cutoff]
 
     from finguard.core import score_calibrated, train_calibrated
-    X, y = tr[WIRE_FEATURES], tr["y"].values
+    X = tr[WIRE_FEATURES]
+    # F4 (D-039): honest training labels — a fraud row is a positive ONLY if it was
+    # DISCOVERED before the training cutoff. Fraud not yet discovered trains as 0, the
+    # true production condition (establishment test-payments no longer leak their label).
+    y = ((tr["label"] != "legit") & (tr["discovered_at"] < cutoff_ts)).astype(int).values
     model, cal, _ = train_calibrated(X, y, scale_pos_weight=20)
 
     p = score_calibrated(model, cal, te[WIRE_FEATURES])
     amt = te["amt"].values
     yb = te["y"].values.astype(bool)
-    held = p > hold_threshold(amt)
-    human_queue = held & (amt > HUMAN_RELEASE_ABOVE)
     n_days_te = te["timestamp"].dt.normalize().nunique()
+
+    # model-only baseline (D-027 threshold, no business control)
+    held_m = p > hold_threshold(amt)
+    # model + D-035/D-036 controls
+    held, control_held, human_queue, dual_control = decide(
+        p, amt, te["benef_account_age_days"].values,
+        te["cumulative_to_account"].values)
 
     loss_naive = float((amt * yb).sum())          # release everything
     loss = float((amt * (yb & ~held)).sum() + R_FRAC * (amt * (yb & held)).sum()
@@ -396,11 +454,18 @@ def main():
         "test_rows": int(len(te)), "test_days": int(n_days_te),
         "fraud_rows": int(yb.sum()),
         "fraud_dollars": round(float((amt * yb).sum()), 2),
+        "train_positives_labeled": int(y.sum()),   # F4: fewer than raw fraud rows
+        "train_fraud_rows_raw": int((tr["label"] != "legit").sum()),
         "recall_by_count": round(float((yb & held).sum() / yb.sum()), 4),
         "recall_by_value": round(float((amt * (yb & held)).sum() / (amt * yb).sum()), 4),
+        "recall_model_only_by_count": round(float((yb & held_m).sum() / yb.sum()), 4),
         "precision": round(float((yb & held).sum() / max(held.sum(), 1)), 4),
         "holds_per_day": round(float(held.sum() / n_days_te), 1),
+        "control_only_holds_per_day": round(float((control_held & ~held_m).sum() / n_days_te), 1),
         "human_release_queue_per_day": round(float(human_queue.sum() / n_days_te), 1),
+        # analyst-review: this is wires ROUTED to the dual-control queue awaiting a
+        # second-analyst disposition — NOT auto-releases (most are correctly-held fraud)
+        "dual_control_queue_per_day": round(float(dual_control.sum() / n_days_te), 1),
         "false_holds_per_day": round(float((~yb & held).sum() / n_days_te), 1),
         "expected_loss_vs_naive": round(loss / loss_naive, 4),
         # F4: n=0 cells reported explicitly, never silently omitted
@@ -411,6 +476,9 @@ def main():
             for v in VARIANTS
         },
         "largest_missed_wire": round(float((amt * (yb & ~held)).max()), 2) if (yb & ~held).any() else 0.0,
+        # analyst-review: attribute the worst miss to its variant so it can be dispositioned
+        "largest_missed_variant": (te.loc[(yb & ~held), "variant"]
+                                   .iloc[np.argmax(amt[(yb & ~held)])] if (yb & ~held).any() else None),
         "largest_caught_wire": round(float((amt * (yb & held)).max()), 2) if (yb & held).any() else 0.0,
     }
     # C11 ablation (analyst backlog #1): how much recall depends on the two suspected
@@ -443,7 +511,7 @@ def main():
     log_run("wire_train", params={"features": WIRE_FEATURES, "r_frac": R_FRAC,
                                   "d_frac": D_FRAC, "review_cost": REVIEW_COST,
                                   "variants": VARIANTS, "ablated": ABLATED},
-            metrics=report, tag="cycle11")
+            metrics=report, tag="cycle13")
 
 
 if __name__ == "__main__":

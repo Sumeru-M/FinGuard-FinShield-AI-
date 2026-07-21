@@ -42,3 +42,4 @@ Every entry is binding on all roles until explicitly revised by the owner.
 | D-036 | 2026-07-20 | Sub-$100k release policy | Dual-control release: second-analyst co-sign required to release any held wire (closes hostile-analyst poisoning path) | Locked |
 | D-037 | 2026-07-20 | Sanctions feed auth | Spec now (Cybersecurity), build at real integration | Locked |
 | D-038 | 2026-07-20 | Cycle 12 | Consolidation: shared core library, test suite from harness gates, README/architecture docs. Parallel agent work: Cybersecurity (D-037 spec), PM (docs) | Locked |
+| D-039 | 2026-07-20 | Cycle 13 | Implement approved/correctness items: wire label-timing fix (F4), D-035 new-beneficiary cooling-off + cumulative cap, D-036 dual-control release accounting; maker-checker review gate | Locked |
