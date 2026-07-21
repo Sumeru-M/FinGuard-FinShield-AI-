@@ -5,23 +5,23 @@
   "fraud_dollars": 14998241.65,
   "train_positives_labeled": 287,
   "train_fraud_rows_raw": 422,
-  "recall_by_count": 0.9742,
-  "recall_by_value": 0.9931,
+  "recall_by_count": 0.9785,
+  "recall_by_value": 0.9954,
   "recall_model_only_by_count": 0.97,
-  "precision": 0.2116,
-  "holds_per_day": 27.5,
-  "control_only_holds_per_day": 6.7,
-  "human_release_queue_per_day": 1.8,
-  "dual_control_queue_per_day": 25.7,
-  "false_holds_per_day": 21.7,
-  "expected_loss_vs_naive": 0.1138,
+  "precision": 0.2395,
+  "holds_per_day": 24.4,
+  "control_only_holds_per_day": 3.6,
+  "human_release_queue_per_day": 1.4,
+  "dual_control_queue_per_day": 23.0,
+  "false_holds_per_day": 18.6,
+  "expected_loss_vs_naive": 0.1104,
   "recall_by_variant": {
     "bec_blatant": {
       "recall": 1.0,
       "n": 29
     },
     "bec_evasive": {
-      "recall": 1.0,
+      "recall": 0.9444,
       "n": 18
     },
     "bec_establish_test": {
@@ -37,7 +37,7 @@
       "n": 6
     },
     "bec_establish_slow_strike": {
-      "recall": 0.6875,
+      "recall": 0.8125,
       "n": 16
     },
     "bec_fake_vendor": {
@@ -57,8 +57,8 @@
       "n": 28
     }
   },
-  "largest_missed_wire": 54423.69,
-  "largest_missed_variant": "bec_establish_slow_strike",
+  "largest_missed_wire": 46141.96,
+  "largest_missed_variant": "bec_evasive",
   "largest_caught_wire": 1597209.93,
   "ablation_no_email_behavior_device": {
     "recall_by_count": 0.9785,

@@ -43,3 +43,10 @@ Every entry is binding on all roles until explicitly revised by the owner.
 | D-037 | 2026-07-20 | Sanctions feed auth | Spec now (Cybersecurity), build at real integration | Locked |
 | D-038 | 2026-07-20 | Cycle 12 | Consolidation: shared core library, test suite from harness gates, README/architecture docs. Parallel agent work: Cybersecurity (D-037 spec), PM (docs) | Locked |
 | D-039 | 2026-07-20 | Cycle 13 | Implement approved/correctness items: wire label-timing fix (F4), D-035 new-beneficiary cooling-off + cumulative cap, D-036 dual-control release accounting; maker-checker review gate | Locked |
+| D-040 | 2026-07-20 | Wire control params | D-035 values set: $50k cumulative cap / 45-day cooling window (reduces legit-onboarding friction vs $25k/30d; median invoice ~$13k) | Locked |
+| D-041 | 2026-07-20 | Verification-completion control | Pursue in Cycle 14: release tied to simulated callback-confirmation event (legit clears, fake vendor never does) instead of a fixed clock — closes slow-establishment frontier | Locked |
+| D-042 | 2026-07-20 | Sanctions fail posture | Fail-closed, no exception: wires hold/block if the screening feed is unavailable (per D-037 spec default, D-030 boundary) | Locked |
+| D-043 | 2026-07-20 | P2P friction policy | Approved for implementation: mandatory delayed-settlement + confirmation-of-payee prompts on first-time-recipient payments (mitigates undetectable installment-scam cell; D-018 permits) | Locked |
+| D-044 | 2026-07-20 | AML audit retention | 5 years for sanctions verdicts + wire dispositions (AML/BSA horizon; exceeds 90-day security baseline D-008, compliance records only) | Locked |
+| D-045 | 2026-07-20 | Sanctions vendor SLA | Published list-update SLA is a HARD vendor-selection criterion (needed to size verdict freshness/replay window) | Locked |
+| D-046 | 2026-07-20 | Cycle 14 scope | Two tracks: (a) apply D-040 params + build D-041 verification control + implement D-043 P2P friction; (b) federation hardening (orchestration + DP/tree-leakage mitigation) | Locked |

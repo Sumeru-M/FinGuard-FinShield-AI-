@@ -1,26 +1,36 @@
 {
-  "test_rows": 9067,
-  "test_days": 10,
-  "fraud_rows": 111,
-  "t_hold": 0.0217,
+  "test_rows": 6671,
+  "test_days": 11,
+  "fraud_rows": 244,
+  "t_hold": 0.0458,
   "t_block": 0.4444,
-  "recall": 0.7748,
-  "precision": 0.2337,
-  "alerts_per_day": 36.8,
+  "recall": 0.8443,
+  "recall_with_friction": 0.8934,
+  "precision": 0.5,
+  "alerts_per_day": 37.5,
   "alert_cap": 100,
-  "holds_per_day": 30.9,
-  "blocks_per_day": 5.9,
-  "false_block_count": 5,
-  "cost_vs_naive": 0.3085,
+  "holds_per_day": 23.5,
+  "blocks_per_day": 14.0,
+  "false_block_count": 12,
+  "cost_vs_naive": 0.2028,
+  "friction_prompts_per_day": 115.8,
+  "legit_friction_prompts_per_day": 108.9,
+  "fraud_prevented_by_friction": 15,
   "recall_by_type": {
-    "p2p_app_scam": 0.76,
+    "p2p_app_scam": 0.8412,
     "p2p_ato_transfer": 0.9091
   },
   "recall_by_variant": {
-    "app_blatant": 0.9032,
-    "app_evasive": 0.6957,
+    "app_blatant": 1.0,
+    "app_evasive": 0.7798,
     "ato_blatant": 1.0,
-    "ato_evasive": 0.6667
+    "ato_evasive": 0.75
+  },
+  "recall_by_variant_with_friction": {
+    "app_blatant": 1.0,
+    "app_evasive": 0.8512,
+    "ato_blatant": 1.0,
+    "ato_evasive": 0.75
   },
   "hold_tier_used": true
 }

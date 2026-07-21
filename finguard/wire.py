@@ -36,10 +36,12 @@ REVIEW_COST = 50.0   # fixed analyst cost per held wire
 HUMAN_RELEASE_ABOVE = 100_000.0   # D-028
 DISCOVERY_LATENCY = pd.Timedelta(days=5)   # C13/F4: BEC is discovered days after the loss;
 # an establishment TEST payment isn't known to be fraud until its STRIKE is investigated.
-NEW_BENEFICIARY_CAP = 25_000.0    # D-035: cumulative $ to a new/changed beneficiary
-# allowed before mandatory cooling-off hold pending callback/CoP verification
-COOLING_OFF_DAYS = 30.0           # D-035: a beneficiary account stays "unverified" (capped)
-# for this long after first payment — long enough that establishment strikes land inside it
+NEW_BENEFICIARY_CAP = 50_000.0    # D-040: cumulative $ to a new/changed beneficiary
+# allowed while UNVERIFIED, pending callback/CoP verification (raised from $25k — median
+# invoice ~$13k, so $25k held two normal invoices to a legit new supplier)
+VERIFY_DELAY_DAYS = (2.0, 7.0)    # D-041: a callback takes this long to complete
+CONFIRM_PROB_LEGIT = 0.97         # a real supplier answers an independent callback
+CONFIRM_PROB_FRAUD = 0.05         # a fraud "supplier" rarely does (residual: social engineering)
 
 WIRE_FEATURES = [
     "amount", "log_amount",
@@ -314,6 +316,22 @@ def generate(n_orgs=400, n_days=120, seed=42):
     for acct, s_ts in strike_ts.items():
         m = (df["beneficiary_account"] == acct) & df["variant"].isin(test_v)
         df.loc[m, "discovered_at"] = s_ts + DISCOVERY_LATENCY
+
+    # C14/D-041: callback-verification-completion. Each beneficiary account gets an
+    # INDEPENDENT callback outcome — a real supplier confirms (a genuine contact answers
+    # a number sourced independently of the invoice); a fraud "supplier" structurally
+    # does not. Modeled with realistic imperfection both ways (unreachable legit
+    # suppliers; socially-engineered fraud callbacks). This is a business-process
+    # control, NOT a model feature — verified_at is never in WIRE_FEATURES.
+    rng_v = np.random.default_rng(seed + 1)
+    acct_first = df.groupby("beneficiary_account")["timestamp"].min()
+    acct_fraud = df.groupby("beneficiary_account")["label"].apply(lambda s: (s != "legit").any())
+    verified = {}
+    for acct, first_ts in acct_first.items():
+        p = CONFIRM_PROB_FRAUD if bool(acct_fraud[acct]) else CONFIRM_PROB_LEGIT
+        verified[acct] = (first_ts + pd.Timedelta(days=float(rng_v.uniform(*VERIFY_DELAY_DAYS)))
+                          if rng_v.random() < p else pd.NaT)
+    df["verified_at"] = df["beneficiary_account"].map(verified)
     return df
 
 
@@ -386,7 +404,8 @@ def build_features(df):
 
     ff = pd.DataFrame(rows, columns=WIRE_FEATURES)
     ctrl = pd.DataFrame(controls)
-    meta = df[["wire_id", "timestamp", "amount", "label", "variant", "discovered_at"]] \
+    meta = df[["wire_id", "timestamp", "amount", "label", "variant",
+               "discovered_at", "verified_at"]] \
         .rename(columns={"amount": "amt"}).reset_index(drop=True)
     return pd.concat([meta, ctrl, ff], axis=1)
 
@@ -401,16 +420,17 @@ def hold_threshold(amount: np.ndarray) -> np.ndarray:
     return (D_FRAC * amount + REVIEW_COST) / ((1 - R_FRAC + D_FRAC) * amount)
 
 
-def decide(p, amt, acct_age_days, cum_to_acct):
-    """C13 decision layer: model score + D-035 control, D-028 release routing.
+def decide(p, amt, unverified, cum_to_acct):
+    """C14 decision layer: model score + D-041 verification control, D-028 routing.
       - model_held: amount-dependent cost-model threshold (D-027)
-      - control_held (D-035): a beneficiary account within its COOLING_OFF_DAYS window
-        is capped at NEW_BENEFICIARY_CAP cumulative $; any wire crossing that is held
-        pending callback/CoP verification. Catches establishment strikes too — the
-        account is still inside its cooling window when the strike lands.
+      - control_held (D-040/D-041): while a beneficiary account is UNVERIFIED (its
+        independent callback has not confirmed), cumulative $ to it is capped at
+        NEW_BENEFICIARY_CAP; any wire crossing that is held. Release is tied to
+        verification-COMPLETION, not a clock — so a patient attacker cannot outwait it
+        (a fraud account never verifies), closing the slow-establishment frontier.
     Returns (held, control_held, human_queue, dual_control)."""
     model_held = p > hold_threshold(amt)
-    control_held = (acct_age_days < COOLING_OFF_DAYS) & (cum_to_acct >= NEW_BENEFICIARY_CAP)
+    control_held = unverified & (cum_to_acct >= NEW_BENEFICIARY_CAP)
     held = model_held | control_held
     human_queue = held & (amt > HUMAN_RELEASE_ABOVE)          # D-028: human sign-off
     dual_control = held & (amt <= HUMAN_RELEASE_ABOVE)        # D-036: 2nd-analyst co-sign
@@ -442,9 +462,11 @@ def main():
     # model-only baseline (D-027 threshold, no business control)
     held_m = p > hold_threshold(amt)
     # model + D-035/D-036 controls
+    # D-041: an account is unverified at wire time if its callback never confirmed,
+    # or confirmed only later than this wire
+    unverified = (te["verified_at"].isna() | (te["timestamp"] < te["verified_at"])).values
     held, control_held, human_queue, dual_control = decide(
-        p, amt, te["benef_account_age_days"].values,
-        te["cumulative_to_account"].values)
+        p, amt, unverified, te["cumulative_to_account"].values)
 
     loss_naive = float((amt * yb).sum())          # release everything
     loss = float((amt * (yb & ~held)).sum() + R_FRAC * (amt * (yb & held)).sum()

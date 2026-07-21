@@ -107,9 +107,9 @@ def generate(n_users=3000, n_days=30, seed=42):
 
     # C8-1 (D-026): sleeper mules — accounts with months of ORDINARY personal use
     # before activation. They defeat account-age and clean-history heuristics.
-    sleepers = [f"u_{i:05d}" for i in rng.choice(n_users, size=25, replace=False)]
+    sleepers = [f"u_{i:05d}" for i in rng.choice(n_users, size=60, replace=False)]
 
-    n_scams = 120
+    n_scams = 360   # C14: grown for a meaningful friction-effect measurement (was 120)
     for si in range(n_scams):                      # APP scams: THE VICTIM PAYS
         evasive = si % 2 == 1                      # 50/50 blatant / evasive
         victim = str(rng.choice(users))
@@ -141,7 +141,7 @@ def generate(n_users=3000, n_days=30, seed=42):
                     label="p2p_app_scam", variant="app_evasive",
                 ))
 
-    n_ato = 40
+    n_ato = 120   # C14: grown alongside scams (was 40)
     for ai in range(n_ato):                        # ATO: attacker pushes funds out
         evasive = ai % 2 == 1
         victim = str(rng.choice(users))
@@ -220,7 +220,8 @@ def build_features(df, account_created):
         recip_first_seen.setdefault(t.recipient, ts)
 
     ff = pd.DataFrame(rows, columns=P2P_FEATURES)
-    return pd.concat([df[["transfer_id", "timestamp", "label", "variant"]]
+    return pd.concat([df[["transfer_id", "timestamp", "label", "variant",
+                          "sender", "recipient"]]
                       .reset_index(drop=True), ff], axis=1)
 
 
@@ -251,6 +252,50 @@ def analytic_thresholds(oof, n_days):
     return t_hold, float(max(t_block, t_hold))
 
 
+# D-043 friction policy: mandatory Confirmation-of-Payee + delayed settlement on
+# first-time-recipient payments. Empirically-grounded effectiveness (UK PSR data shows
+# CoP + scam warnings interrupt a meaningful share of APP scams; delayed settlement adds
+# a recall window). Applied to fraud the MODEL MISSES — friction is the second line.
+COP_ABANDON_APP = 0.40       # share of prompted APP-scam victims who abandon on CoP mismatch
+SETTLEMENT_RECALL = 0.30     # share of the remainder stopped in the delayed-settlement window
+
+
+def apply_friction(te, yb, alerted, seed=42):
+    """D-043: first-time-recipient payments get CoP + delayed settlement.
+    Key realism: if a victim ABANDONS at the CoP prompt on the first payment to a
+    scam recipient, the ENTIRE scheme collapses — every later installment to that
+    recipient is prevented too, not just the first. Returns (prevented_mask, first_time)."""
+    rng = np.random.default_rng(seed)
+    te = te.reset_index(drop=True)
+    first_time = te["is_first_time_recipient"].values.astype(bool)
+    is_app = (te["label"].values == "p2p_app_scam")
+    prevented = np.zeros(len(te), dtype=bool)
+
+    # Scheme-level CoP interruption. CoP fires at the FIRST contact with a new recipient
+    # (analyst-review fix): if the model missed that FIRST-chronological payment, CoP
+    # gets its shot regardless of whether the model later catches installment 2/3 via
+    # cumulative-amount features. Abandonment there collapses the whole scheme.
+    ts = te["timestamp"].values
+    fraud_idx = np.where(yb)[0]
+    pairs = {}
+    for i in fraud_idx:
+        pairs.setdefault((te.at[i, "sender"], te.at[i, "recipient"]), []).append(i)
+    for (s, r), idxs in pairs.items():
+        first = min(idxs, key=lambda i: ts[i])           # first contact = CoP moment
+        if is_app[first] and first_time[first] and not alerted[first] \
+                and rng.random() < COP_ABANDON_APP:
+            for i in idxs:
+                prevented[i] = True   # victim walked away — whole scheme stopped
+
+    # Delayed-settlement recall: independent per missed first-time payment not already
+    # prevented (exposed to the settlement window regardless of scam type)
+    for i in fraud_idx:
+        if not prevented[i] and not alerted[i] and first_time[i]:
+            if rng.random() < SETTLEMENT_RECALL:
+                prevented[i] = True
+    return prevented, first_time
+
+
 def main():
     df, acct = generate()
     ff = build_features(df, acct)
@@ -274,11 +319,18 @@ def main():
     cost = (COST_FN * (yb & ~alerted).sum() + COST_FRAUD_HOLD * (yb & held).sum()
             + COST_FP_BLOCK * (~yb & blocked).sum() + COST_FP_HOLD * (~yb & held).sum())
 
+    # D-043 friction layer (second line of defense on model-missed fraud)
+    prevented, first_time = apply_friction(te, yb, alerted)
+    effective = alerted | prevented   # caught by model OR stopped by friction
+    friction_volume = int((first_time).sum())        # legit + fraud first-time payments
+    legit_friction = int((first_time & ~yb).sum())   # the friction cost: legit prompts
+
     report = {
         "test_rows": int(len(te)), "test_days": int(n_days_te),
         "fraud_rows": int(yb.sum()),
         "t_hold": round(t_hold, 4), "t_block": round(t_block, 4),
         "recall": round(float((yb & alerted).sum() / yb.sum()), 4),
+        "recall_with_friction": round(float((yb & effective).sum() / yb.sum()), 4),
         "precision": round(float((yb & alerted).sum() / max(alerted.sum(), 1)), 4),
         "alerts_per_day": round(float(alerted.sum() / n_days_te), 1),
         "alert_cap": ALERT_CAP_PER_DAY,
@@ -286,12 +338,20 @@ def main():
         "blocks_per_day": round(float(blocked.sum() / n_days_te), 1),
         "false_block_count": int((~yb & blocked).sum()),
         "cost_vs_naive": round(float(cost / (COST_FN * yb.sum())), 4),
+        "friction_prompts_per_day": round(float(friction_volume / n_days_te), 1),
+        "legit_friction_prompts_per_day": round(float(legit_friction / n_days_te), 1),
+        "fraud_prevented_by_friction": int((yb & prevented).sum()),
         "recall_by_type": {
             k: round(float((te[te.label == k].index.isin(te.index[alerted])).mean()), 4)
             for k in ["p2p_app_scam", "p2p_ato_transfer"]
         },
         "recall_by_variant": {
             v: round(float((te[te.variant == v].index.isin(te.index[alerted])).mean()), 4)
+            for v in ["app_blatant", "app_evasive", "ato_blatant", "ato_evasive"]
+            if (te.variant == v).any()
+        },
+        "recall_by_variant_with_friction": {
+            v: round(float((te[te.variant == v].index.isin(te.index[effective])).mean()), 4)
             for v in ["app_blatant", "app_evasive", "ato_blatant", "ato_evasive"]
             if (te.variant == v).any()
         },

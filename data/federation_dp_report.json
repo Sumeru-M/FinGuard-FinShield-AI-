@@ -1,0 +1,288 @@
+{
+  "per_round": {
+    "distill_only": {
+      "inst_001": {
+        "test_rows": 37779,
+        "federated_dp": {
+          "recall": 0.9038,
+          "precision": 0.4476,
+          "cost_vs_naive": 0.2312,
+          "fraud_rows": 52
+        },
+        "mean_abs_probe_noise": 0.0
+      },
+      "inst_002": {
+        "test_rows": 12513,
+        "federated_dp": {
+          "recall": 0.9375,
+          "precision": 0.8824,
+          "cost_vs_naive": 0.245,
+          "fraud_rows": 16
+        },
+        "mean_abs_probe_noise": 0.0
+      },
+      "inst_003": {
+        "test_rows": 6826,
+        "federated_dp": {
+          "recall": 0.3333,
+          "precision": 0.4,
+          "cost_vs_naive": 0.73,
+          "fraud_rows": 6
+        },
+        "mean_abs_probe_noise": 0.0
+      }
+    },
+    "epsilon_50.0": {
+      "inst_001": {
+        "test_rows": 37779,
+        "federated_dp": {
+          "recall": 0.9038,
+          "precision": 0.4123,
+          "cost_vs_naive": 0.2415,
+          "fraud_rows": 52
+        },
+        "mean_abs_probe_noise": 0.01
+      },
+      "inst_002": {
+        "test_rows": 12513,
+        "federated_dp": {
+          "recall": 0.9375,
+          "precision": 0.8824,
+          "cost_vs_naive": 0.17,
+          "fraud_rows": 16
+        },
+        "mean_abs_probe_noise": 0.0102
+      },
+      "inst_003": {
+        "test_rows": 6826,
+        "federated_dp": {
+          "recall": 0.3333,
+          "precision": 0.4,
+          "cost_vs_naive": 0.73,
+          "fraud_rows": 6
+        },
+        "mean_abs_probe_noise": 0.01
+      }
+    },
+    "epsilon_20.0": {
+      "inst_001": {
+        "test_rows": 37779,
+        "federated_dp": {
+          "recall": 0.9038,
+          "precision": 0.4052,
+          "cost_vs_naive": 0.2669,
+          "fraud_rows": 52
+        },
+        "mean_abs_probe_noise": 0.0247
+      },
+      "inst_002": {
+        "test_rows": 12513,
+        "federated_dp": {
+          "recall": 0.9375,
+          "precision": 0.8824,
+          "cost_vs_naive": 0.22,
+          "fraud_rows": 16
+        },
+        "mean_abs_probe_noise": 0.0256
+      },
+      "inst_003": {
+        "test_rows": 6826,
+        "federated_dp": {
+          "recall": 0.3333,
+          "precision": 0.3333,
+          "cost_vs_naive": 0.74,
+          "fraud_rows": 6
+        },
+        "mean_abs_probe_noise": 0.0251
+      }
+    },
+    "epsilon_10.0": {
+      "inst_001": {
+        "test_rows": 37779,
+        "federated_dp": {
+          "recall": 0.9231,
+          "precision": 0.3582,
+          "cost_vs_naive": 0.2635,
+          "fraud_rows": 52
+        },
+        "mean_abs_probe_noise": 0.0499
+      },
+      "inst_002": {
+        "test_rows": 12513,
+        "federated_dp": {
+          "recall": 1.0,
+          "precision": 0.6957,
+          "cost_vs_naive": 0.1387,
+          "fraud_rows": 16
+        },
+        "mean_abs_probe_noise": 0.0502
+      },
+      "inst_003": {
+        "test_rows": 6826,
+        "federated_dp": {
+          "recall": 0.3333,
+          "precision": 0.2857,
+          "cost_vs_naive": 0.75,
+          "fraud_rows": 6
+        },
+        "mean_abs_probe_noise": 0.0499
+      }
+    },
+    "epsilon_5.0": {
+      "inst_001": {
+        "test_rows": 37779,
+        "federated_dp": {
+          "recall": 0.9231,
+          "precision": 0.0112,
+          "cost_vs_naive": 5.0538,
+          "fraud_rows": 52
+        },
+        "mean_abs_probe_noise": 0.0999
+      },
+      "inst_002": {
+        "test_rows": 12513,
+        "federated_dp": {
+          "recall": 1.0,
+          "precision": 0.0061,
+          "cost_vs_naive": 9.855,
+          "fraud_rows": 16
+        },
+        "mean_abs_probe_noise": 0.0985
+      },
+      "inst_003": {
+        "test_rows": 6826,
+        "federated_dp": {
+          "recall": 0.6667,
+          "precision": 0.0044,
+          "cost_vs_naive": 9.4133,
+          "fraud_rows": 6
+        },
+        "mean_abs_probe_noise": 0.0989
+      }
+    },
+    "epsilon_1.0": {
+      "inst_001": {
+        "test_rows": 37779,
+        "federated_dp": {
+          "recall": 1.0,
+          "precision": 0.0014,
+          "cost_vs_naive": 43.7223,
+          "fraud_rows": 52
+        },
+        "mean_abs_probe_noise": 0.312
+      },
+      "inst_002": {
+        "test_rows": 12513,
+        "federated_dp": {
+          "recall": 1.0,
+          "precision": 0.0013,
+          "cost_vs_naive": 46.9513,
+          "fraud_rows": 16
+        },
+        "mean_abs_probe_noise": 0.3178
+      },
+      "inst_003": {
+        "test_rows": 6826,
+        "federated_dp": {
+          "recall": 1.0,
+          "precision": 0.0009,
+          "cost_vs_naive": 68.38,
+          "fraud_rows": 6
+        },
+        "mean_abs_probe_noise": 0.3163
+      }
+    }
+  },
+  "summary": [
+    {
+      "institution": "inst_001",
+      "cycle6_recall_local": 0.404,
+      "cycle6_recall_fed_raw_model": 0.808,
+      "cycle6_cost_fed_raw_model": 0.31,
+      "distill_only_recall": 0.9038,
+      "distill_only_precision": 0.4476,
+      "distill_only_cost": 0.2312,
+      "distill_only_mean_abs_noise": 0.0,
+      "epsilon_50.0_recall": 0.9038,
+      "epsilon_50.0_precision": 0.4123,
+      "epsilon_50.0_cost": 0.2415,
+      "epsilon_50.0_mean_abs_noise": 0.01,
+      "epsilon_20.0_recall": 0.9038,
+      "epsilon_20.0_precision": 0.4052,
+      "epsilon_20.0_cost": 0.2669,
+      "epsilon_20.0_mean_abs_noise": 0.0247,
+      "epsilon_10.0_recall": 0.9231,
+      "epsilon_10.0_precision": 0.3582,
+      "epsilon_10.0_cost": 0.2635,
+      "epsilon_10.0_mean_abs_noise": 0.0499,
+      "epsilon_5.0_recall": 0.9231,
+      "epsilon_5.0_precision": 0.0112,
+      "epsilon_5.0_cost": 5.0538,
+      "epsilon_5.0_mean_abs_noise": 0.0999,
+      "epsilon_1.0_recall": 1.0,
+      "epsilon_1.0_precision": 0.0014,
+      "epsilon_1.0_cost": 43.7223,
+      "epsilon_1.0_mean_abs_noise": 0.312
+    },
+    {
+      "institution": "inst_002",
+      "cycle6_recall_local": 0.563,
+      "cycle6_recall_fed_raw_model": 0.938,
+      "cycle6_cost_fed_raw_model": 0.143,
+      "distill_only_recall": 0.9375,
+      "distill_only_precision": 0.8824,
+      "distill_only_cost": 0.245,
+      "distill_only_mean_abs_noise": 0.0,
+      "epsilon_50.0_recall": 0.9375,
+      "epsilon_50.0_precision": 0.8824,
+      "epsilon_50.0_cost": 0.17,
+      "epsilon_50.0_mean_abs_noise": 0.0102,
+      "epsilon_20.0_recall": 0.9375,
+      "epsilon_20.0_precision": 0.8824,
+      "epsilon_20.0_cost": 0.22,
+      "epsilon_20.0_mean_abs_noise": 0.0256,
+      "epsilon_10.0_recall": 1.0,
+      "epsilon_10.0_precision": 0.6957,
+      "epsilon_10.0_cost": 0.1387,
+      "epsilon_10.0_mean_abs_noise": 0.0502,
+      "epsilon_5.0_recall": 1.0,
+      "epsilon_5.0_precision": 0.0061,
+      "epsilon_5.0_cost": 9.855,
+      "epsilon_5.0_mean_abs_noise": 0.0985,
+      "epsilon_1.0_recall": 1.0,
+      "epsilon_1.0_precision": 0.0013,
+      "epsilon_1.0_cost": 46.9513,
+      "epsilon_1.0_mean_abs_noise": 0.3178
+    },
+    {
+      "institution": "inst_003",
+      "cycle6_recall_local": 0.333,
+      "cycle6_recall_fed_raw_model": 0.5,
+      "cycle6_cost_fed_raw_model": 0.603,
+      "distill_only_recall": 0.3333,
+      "distill_only_precision": 0.4,
+      "distill_only_cost": 0.73,
+      "distill_only_mean_abs_noise": 0.0,
+      "epsilon_50.0_recall": 0.3333,
+      "epsilon_50.0_precision": 0.4,
+      "epsilon_50.0_cost": 0.73,
+      "epsilon_50.0_mean_abs_noise": 0.01,
+      "epsilon_20.0_recall": 0.3333,
+      "epsilon_20.0_precision": 0.3333,
+      "epsilon_20.0_cost": 0.74,
+      "epsilon_20.0_mean_abs_noise": 0.0251,
+      "epsilon_10.0_recall": 0.3333,
+      "epsilon_10.0_precision": 0.2857,
+      "epsilon_10.0_cost": 0.75,
+      "epsilon_10.0_mean_abs_noise": 0.0499,
+      "epsilon_5.0_recall": 0.6667,
+      "epsilon_5.0_precision": 0.0044,
+      "epsilon_5.0_cost": 9.4133,
+      "epsilon_5.0_mean_abs_noise": 0.0989,
+      "epsilon_1.0_recall": 1.0,
+      "epsilon_1.0_precision": 0.0009,
+      "epsilon_1.0_cost": 68.38,
+      "epsilon_1.0_mean_abs_noise": 0.3163
+    }
+  ]
+}
