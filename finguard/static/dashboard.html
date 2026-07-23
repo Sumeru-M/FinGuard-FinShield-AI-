@@ -92,8 +92,21 @@ async function load() {
   }
 }
 
+function analystId() {
+  // C15 role auth: dispositions are attributable — identity required once per browser
+  let id = localStorage.getItem("finguard_analyst_id");
+  while (!id || !id.trim()) {
+    id = prompt("Analyst ID (required — dispositions are audited):") || "";
+  }
+  localStorage.setItem("finguard_analyst_id", id.trim());
+  return id.trim();
+}
+
 async function disposition(alertId, label) {
-  await fetch(`/alerts/${alertId}/disposition/${label}`, { method: "POST" });
+  const r = await fetch(
+    `/alerts/${alertId}/disposition/${label}?analyst_id=${encodeURIComponent(analystId())}`,
+    { method: "POST" });
+  if (r.status === 401) { localStorage.removeItem("finguard_analyst_id"); return disposition(alertId, label); }
   load();
 }
 load();

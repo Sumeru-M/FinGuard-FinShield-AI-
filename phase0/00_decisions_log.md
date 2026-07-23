@@ -50,3 +50,6 @@ Every entry is binding on all roles until explicitly revised by the owner.
 | D-044 | 2026-07-20 | AML audit retention | 5 years for sanctions verdicts + wire dispositions (AML/BSA horizon; exceeds 90-day security baseline D-008, compliance records only) | Locked |
 | D-045 | 2026-07-20 | Sanctions vendor SLA | Published list-update SLA is a HARD vendor-selection criterion (needed to size verdict freshness/replay window) | Locked |
 | D-046 | 2026-07-20 | Cycle 14 scope | Two tracks: (a) apply D-040 params + build D-041 verification control + implement D-043 P2P friction; (b) federation hardening (orchestration + DP/tree-leakage mitigation) | Locked |
+| D-047 | 2026-07-21 | Wire per-wire floor | Any wire above $10k to an UNVERIFIED beneficiary is held regardless of cumulative — closes the single-shot BEC seam the D-040 cap raise opened | Locked |
+| D-048 | 2026-07-21 | Federation aggregator | Third-party vendor operates the neutral round aggregator (stateless/replicated per design doc); consortium/rotating options rejected | Locked |
+| D-049 | 2026-07-21 | Cycle 15 scope | Three tracks: (a) controls backlog — per-wire floor, never-verifying-supplier override path, disposition audit-trail + role auth; (b) federation DP privacy accountant; (c) card-channel red-team round 2 (reputation features + hold-state attacked with P2P/wire tradecraft) | Locked |

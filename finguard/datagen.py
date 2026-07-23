@@ -279,8 +279,212 @@ def _card_testing_evasive(rng, ts) -> list[dict]:
     return out
 
 
+def _sleeper_device_burst(rng, holders: list[Cardholder], ts) -> list[dict]:
+    """Cycle 15 (D-049c) red-team round 2, tradecraft #1: sleeper device.
+
+    Mirrors the P2P sleeper-mule pattern (`finguard/p2p.py`, C8-1/D-026): a device
+    accumulates WEEKS of genuine, low-value transaction history on its own holder's
+    card before pivoting to defraud OTHER cardholders entirely. Real-world analogue:
+    a rooted/SIM-swapped phone, or a fraud-ring member's own device, used for
+    ordinary personal spend for months to build store-observed trust before being
+    weaponized against stolen credentials.
+
+    Defeats: device_age_days (self-reported, spoofable anyway) AND, more importantly,
+    device_observed_age_days (system-observed, normally robust to spoofing — but here
+    it's genuinely old) and device_alltime_cards (stays at 1 through the whole warm-up
+    and only creeps up card-by-card during activation, so early activations look
+    exactly like a device with one long-standing, trusted relationship).
+    """
+    owner = holders[rng.integers(0, len(holders))]
+    device = f"dev_sleeper_{rng.integers(0, 10**6):06d}"
+    warm_days = int(rng.integers(20, 41))
+    warm_start = ts - pd.Timedelta(days=warm_days)
+    out = []
+    for d in range(warm_days):
+        if rng.random() < min(owner.txn_rate_per_day / 2.5, 0.6):
+            hour = int(rng.integers(owner.active_hours[0], owner.active_hours[1]))
+            out.append(dict(
+                timestamp=warm_start + pd.Timedelta(days=d, hours=hour, minutes=int(rng.integers(0, 60))),
+                card_id=owner.card_id,
+                merchant_id=str(rng.choice(owner.usual_merchants)),
+                merchant_category=str(rng.choice(owner.usual_categories)),
+                amount=round(float(rng.lognormal(owner.spend_mu, owner.spend_sigma)), 2),
+                country=owner.home_country,
+                device_id=device,
+                device_age_days=float(d) + float(rng.uniform(0, 0.5)),
+                channel="ecom" if rng.random() < 0.6 else "pos",
+                session_behavior_score=float(np.clip(rng.normal(0.85, 0.08), 0, 1)),
+                label="confirmed_legitimate",
+                variant="none",
+            ))
+    n_victims = int(rng.integers(4, 9))
+    for _ in range(n_victims):
+        victim = holders[rng.integers(0, len(holders))]
+        tries = 0
+        while victim.card_id == owner.card_id and tries < 5:
+            victim = holders[rng.integers(0, len(holders))]
+            tries += 1
+        out.append(dict(
+            timestamp=ts + pd.Timedelta(hours=float(rng.uniform(0, 96)), minutes=int(rng.integers(0, 60))),
+            card_id=victim.card_id,
+            merchant_id=f"m_{rng.integers(4000, 5000):05d}",
+            merchant_category=str(rng.choice(list(HIGH_RISK_MCC))),
+            amount=round(float(rng.lognormal(victim.spend_mu + 0.8, 0.5)), 2),
+            country=victim.home_country if rng.random() < 0.5 else str(rng.choice(COUNTRIES)),
+            device_id=device,
+            device_age_days=float(warm_days) + float(rng.integers(0, 4)),
+            channel="ecom",
+            session_behavior_score=float(np.clip(rng.normal(0.55, 0.12), 0, 1)),
+            label="confirmed_fraud_cnp" if rng.random() < 0.6 else "confirmed_fraud_ato",
+            variant="sleeper_device",
+        ))
+    return out
+
+
+def _label_latency_ring(rng, holders: list[Cardholder], ts) -> list[dict]:
+    """Cycle 15 (D-049c) red-team round 2, tradecraft #2: label-latency exploitation.
+
+    Mirrors the wire channel's label-timing lesson (Cycle 13, F4): the ring
+    compresses fraud across many DIFFERENT stolen cards, each through a DIFFERENT
+    rotating device, funneled to a small pool of shared cash-out ("drop") merchants,
+    all within roughly 18 hours — inside the 24h LABEL_LATENCY window
+    (`finguard/features.py`) — so no device_confirmed_fraud_links / card_prior_
+    confirmed_fraud / merchant_confirmed_fraud_links mark has landed on anything by
+    the time the ring finishes. Per-transaction signals (foreign country, high-risk
+    MCC) look like ordinary blatant fraud — the point of this variant is to test
+    whether real-time, non-label-loop features (merchant_txns_10m, device velocity)
+    still catch the ring even though the label loop structurally can't in time.
+    """
+    n_drop = int(rng.integers(2, 4))
+    drop_merchants = [f"m_{rng.integers(4000, 5000):05d}" for _ in range(n_drop)]
+    n_cards = int(rng.integers(20, 36))
+    out = []
+    for _ in range(n_cards):
+        h = holders[rng.integers(0, len(holders))]
+        out.append(dict(
+            timestamp=ts + pd.Timedelta(hours=float(rng.uniform(0, 18)), minutes=int(rng.integers(0, 60))),
+            card_id=h.card_id,
+            merchant_id=str(rng.choice(drop_merchants)),
+            merchant_category=str(rng.choice(list(HIGH_RISK_MCC))),
+            amount=round(float(rng.lognormal(h.spend_mu + 1.0, 0.5)), 2),
+            country=str(rng.choice(COUNTRIES)),
+            device_id=f"dev_ring_{rng.integers(0, 10**6):06d}",   # rotating: one device per card
+            device_age_days=float(rng.uniform(0, 0.3)),
+            channel="ecom",
+            session_behavior_score=float(np.clip(rng.normal(0.40, 0.15), 0, 1)),
+            label="confirmed_fraud_cnp",
+            variant="label_latency_ring",
+        ))
+    return out
+
+
+def _low_slow_profile(rng, h: Cardholder, ts) -> list[dict]:
+    """Cycle 15 (D-049c) red-team round 2, tradecraft #3: low-and-slow within-profile
+    fraud, timed to the card's own habits.
+
+    Models a RAT / remote-session-hijack actor riding the VICTIM's own device and
+    browser session — real fraud tradecraft where malware lets the attacker transact
+    from inside the victim's live, already-trusted session. Defeats
+    is_new_device_for_card, device_age_days, hour_dev_from_card_mean, and
+    amount_zscore_card simultaneously: the device is genuinely the card's own, the
+    hour is drawn from the card's own active-hours window, and the amount is drawn
+    tightly around the card's own spend distribution. The only tell left is
+    session_behavior_score (biometric mismatch) and a mild drift toward high-risk /
+    unfamiliar merchants.
+    """
+    device = str(rng.choice(h.devices))
+    n = int(rng.integers(2, 5))
+    out = []
+    for k in range(n):
+        hour = int(rng.integers(h.active_hours[0], h.active_hours[1]))
+        day_ts = ts + pd.Timedelta(days=k * int(rng.integers(1, 3)))
+        out.append(dict(
+            timestamp=day_ts.replace(hour=hour, minute=int(rng.integers(0, 60)), second=int(rng.integers(0, 60))),
+            card_id=h.card_id,
+            merchant_id=str(rng.choice(h.usual_merchants)) if rng.random() < 0.3
+            else f"m_{rng.integers(0, 5000):05d}",
+            merchant_category=str(rng.choice(list(HIGH_RISK_MCC))) if rng.random() < 0.6
+            else str(rng.choice(h.usual_categories)),
+            amount=round(float(rng.lognormal(h.spend_mu + 0.15, h.spend_sigma * 0.7)), 2),
+            country=h.home_country,
+            device_id=device,
+            device_age_days=float(rng.uniform(30, 900)),
+            channel="ecom",
+            session_behavior_score=float(np.clip(rng.normal(0.50, 0.12), 0, 1)),  # the one remaining tell
+            label="confirmed_fraud_ato",
+            variant="low_slow_profile",
+        ))
+    return out
+
+
+def _bust_out_synthetic(rng, ts, idx: int) -> list[dict]:
+    """Cycle 15 (D-049c) red-team round 2, tradecraft #4 (own addition): bust-out
+    synthetic identity.
+
+    A purpose-built synthetic card_id (outside the normal cardholder population,
+    same idea as the card-testing variants' out-of-population cards) behaves like an
+    ordinary low-risk cardholder for 3-6 weeks — small, regular, same-device,
+    same-country purchases that build genuine device_observed_age_days and merchant
+    familiarity — then executes a rapid high-value max-out burst across high-risk
+    categories before going dark. This is classic card-issuer bust-out fraud:
+    synthetic identities are built precisely to game tenure-based trust signals, the
+    same category of signal our device/merchant "observed age" features rely on.
+    """
+    card_id = f"card_syn{idx:05d}"
+    country = str(rng.choice(COUNTRIES))
+    merchants = [f"m_{rng.integers(0, 4000):05d}" for _ in range(int(rng.integers(3, 6)))]
+    categories = list(rng.choice(MCC_POOL, size=int(rng.integers(2, 4)), replace=False))
+    device = f"dev_syn_{idx:05d}"
+    spend_mu = float(rng.normal(2.8, 0.4))
+    ramp_days = int(rng.integers(18, 36))
+    ramp_start = ts - pd.Timedelta(days=ramp_days)
+    out = []
+    for d in range(ramp_days):
+        if rng.random() < 0.5:
+            hour = int(rng.integers(8, 22))
+            out.append(dict(
+                timestamp=ramp_start + pd.Timedelta(days=d, hours=hour, minutes=int(rng.integers(0, 60))),
+                card_id=card_id,
+                merchant_id=str(rng.choice(merchants)),
+                merchant_category=str(rng.choice(categories)),
+                amount=round(float(rng.lognormal(spend_mu, 0.4)), 2),
+                country=country,
+                device_id=device,
+                device_age_days=float(d) + float(rng.uniform(0, 0.5)),
+                channel="pos" if rng.random() < 0.5 else "ecom",
+                session_behavior_score=float(np.clip(rng.normal(0.85, 0.07), 0, 1)),
+                label="confirmed_legitimate",
+                variant="none",
+            ))
+    n_burst = int(rng.integers(3, 9))
+    for k in range(n_burst):
+        out.append(dict(
+            timestamp=ts + pd.Timedelta(minutes=int(rng.integers(0, 600)) + k * int(rng.integers(5, 40))),
+            card_id=card_id,
+            merchant_id=f"m_{rng.integers(4000, 5000):05d}",
+            merchant_category=str(rng.choice(list(HIGH_RISK_MCC))),
+            amount=round(float(rng.lognormal(spend_mu + 1.4 + 0.15 * k, 0.4)), 2),
+            country=country,
+            device_id=device,
+            device_age_days=float(ramp_days),
+            channel="ecom",
+            session_behavior_score=float(np.clip(rng.normal(0.55, 0.12), 0, 1)),
+            label="confirmed_fraud_synthetic_card",
+            variant="bust_out_synthetic",
+        ))
+    return out
+
+
 def generate(n_cards: int = 2000, n_days: int = 30, fraud_prevalence: float = 0.002,
-             seed: int = 42, evasive_share: float = 0.5) -> pd.DataFrame:
+             seed: int = 42, evasive_share: float = 0.5,
+             sleeper_device_incidents: int = 0, label_latency_ring_incidents: int = 0,
+             low_slow_profile_incidents: int = 0,
+             bust_out_synthetic_incidents: int = 0) -> pd.DataFrame:
+    """Cycle 15 (D-049c) note: the four new red-team-round-2 incident-count params
+    default to 0 so every EXISTING caller (federation.py, federation_dp.py, and any
+    positional 5-arg call) is byte-for-byte unaffected by this change — new variants
+    are strictly opt-in via explicit non-zero counts (see `main()` / the Cycle 15
+    card-channel eval run)."""
     rng = np.random.default_rng(seed)
     holders = _make_population(rng, n_cards)
     start = pd.Timestamp("2026-06-01")
@@ -325,6 +529,30 @@ def generate(n_cards: int = 2000, n_days: int = 30, fraud_prevalence: float = 0.
         else:
             rows.extend(_card_testing_evasive(rng, ts) if evasive else _card_testing_burst(rng, ts))
 
+    # Cycle 15 (D-049c): red-team round 2 — cross-channel tradecraft applied to
+    # cards for the first time since Cycle 4. Injected as a dedicated pass with
+    # independent incident counts (not routed through the prevalence-solver above)
+    # so each new variant can be grown toward a statistically usable cell size
+    # without perturbing the calibrated overall card fraud_prevalence target.
+    for _ in range(sleeper_device_incidents):
+        ts = start + pd.Timedelta(days=int(rng.integers(min(45, max(n_days - 1, 1)), n_days)) if n_days > 45
+                                   else int(rng.integers(0, n_days)),
+                                   hours=int(rng.integers(0, 24)))
+        rows.extend(_sleeper_device_burst(rng, holders, ts))
+    for _ in range(label_latency_ring_incidents):
+        ts = start + pd.Timedelta(days=int(rng.integers(0, n_days)), hours=int(rng.integers(0, 24)))
+        rows.extend(_label_latency_ring(rng, holders, ts))
+    for _ in range(low_slow_profile_incidents):
+        h = holders[rng.integers(0, len(holders))]
+        ts = start + pd.Timedelta(days=int(rng.integers(0, max(n_days - 8, 1))),
+                                  hours=int(rng.integers(0, 24)))
+        rows.extend(_low_slow_profile(rng, h, ts))
+    for i in range(bust_out_synthetic_incidents):
+        ts = start + pd.Timedelta(days=int(rng.integers(min(40, max(n_days - 1, 1)), n_days)) if n_days > 40
+                                   else int(rng.integers(0, n_days)),
+                                   hours=int(rng.integers(0, 24)))
+        rows.extend(_bust_out_synthetic(rng, ts, i))
+
     df = pd.DataFrame(rows).sort_values("timestamp").reset_index(drop=True)
     df.insert(0, "transaction_id", [f"txn_{i:08d}" for i in range(len(df))])
     df.insert(1, "institution_id", INSTITUTION_ID)
@@ -339,9 +567,15 @@ def main():
     ap.add_argument("--seed", type=int, default=42)
     ap.add_argument("--evasive-share", type=float, default=0.5)
     ap.add_argument("--out", default="data/transactions.parquet")
+    ap.add_argument("--sleeper-device-incidents", type=int, default=0)
+    ap.add_argument("--label-latency-ring-incidents", type=int, default=0)
+    ap.add_argument("--low-slow-profile-incidents", type=int, default=0)
+    ap.add_argument("--bust-out-synthetic-incidents", type=int, default=0)
     args = ap.parse_args()
 
-    df = generate(args.cards, args.days, args.prevalence, args.seed, args.evasive_share)
+    df = generate(args.cards, args.days, args.prevalence, args.seed, args.evasive_share,
+                   args.sleeper_device_incidents, args.label_latency_ring_incidents,
+                   args.low_slow_profile_incidents, args.bust_out_synthetic_incidents)
     import os
     os.makedirs(os.path.dirname(args.out) or ".", exist_ok=True)
     df.to_parquet(args.out, index=False)

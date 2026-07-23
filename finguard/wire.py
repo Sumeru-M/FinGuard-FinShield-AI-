@@ -42,6 +42,11 @@ NEW_BENEFICIARY_CAP = 50_000.0    # D-040: cumulative $ to a new/changed benefic
 VERIFY_DELAY_DAYS = (2.0, 7.0)    # D-041: a callback takes this long to complete
 CONFIRM_PROB_LEGIT = 0.97         # a real supplier answers an independent callback
 CONFIRM_PROB_FRAUD = 0.05         # a fraud "supplier" rarely does (residual: social engineering)
+PER_WIRE_FLOOR = 10_000.0         # D-047: ANY wire above this to an unverified beneficiary
+# is held regardless of cumulative — closes the single-shot BEC seam the $50k cap opened
+ESCALATE_AFTER_DAYS = 14.0        # C15 override path: unverified accounts escalate to a
+ESCALATE_CONFIRM_LEGIT = 0.90     # manual verification review — legit suppliers get a
+ESCALATE_CONFIRM_FRAUD = 0.02     # second path to full service; fraud still rarely clears
 
 WIRE_FEATURES = [
     "amount", "log_amount",
@@ -328,9 +333,18 @@ def generate(n_orgs=400, n_days=120, seed=42):
     acct_fraud = df.groupby("beneficiary_account")["label"].apply(lambda s: (s != "legit").any())
     verified = {}
     for acct, first_ts in acct_first.items():
-        p = CONFIRM_PROB_FRAUD if bool(acct_fraud[acct]) else CONFIRM_PROB_LEGIT
-        verified[acct] = (first_ts + pd.Timedelta(days=float(rng_v.uniform(*VERIFY_DELAY_DAYS)))
-                          if rng_v.random() < p else pd.NaT)
+        fraud_acct = bool(acct_fraud[acct])
+        p = CONFIRM_PROB_FRAUD if fraud_acct else CONFIRM_PROB_LEGIT
+        if rng_v.random() < p:
+            verified[acct] = first_ts + pd.Timedelta(days=float(rng_v.uniform(*VERIFY_DELAY_DAYS)))
+        else:
+            # C15 override path (analyst-review backlog): accounts still unverified
+            # after ESCALATE_AFTER_DAYS get a manual verification review — the ~3% of
+            # legit suppliers whose callback failed get a second route to full service
+            p2 = ESCALATE_CONFIRM_FRAUD if fraud_acct else ESCALATE_CONFIRM_LEGIT
+            verified[acct] = (first_ts + pd.Timedelta(days=ESCALATE_AFTER_DAYS
+                                                      + float(rng_v.uniform(1, 4)))
+                              if rng_v.random() < p2 else pd.NaT)
     df["verified_at"] = df["beneficiary_account"].map(verified)
     return df
 
@@ -430,7 +444,10 @@ def decide(p, amt, unverified, cum_to_acct):
         (a fraud account never verifies), closing the slow-establishment frontier.
     Returns (held, control_held, human_queue, dual_control)."""
     model_held = p > hold_threshold(amt)
-    control_held = unverified & (cum_to_acct >= NEW_BENEFICIARY_CAP)
+    # D-047 per-wire floor closes the single-shot seam; D-040 cumulative cap catches
+    # accumulation below the floor. Both apply only while unverified.
+    control_held = unverified & ((amt > PER_WIRE_FLOOR)
+                                 | (cum_to_acct >= NEW_BENEFICIARY_CAP))
     held = model_held | control_held
     human_queue = held & (amt > HUMAN_RELEASE_ABOVE)          # D-028: human sign-off
     dual_control = held & (amt <= HUMAN_RELEASE_ABOVE)        # D-036: 2nd-analyst co-sign

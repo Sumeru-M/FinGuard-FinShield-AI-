@@ -121,6 +121,66 @@ Each round, each institution produces one **round artifact**:
   submitting artifacts?) — that's a product/business question for the Team
   Lead/owner, not an engineering one.
 
+## Privacy budget (Cycle 15, D-049 track b)
+
+`finguard/privacy_accountant.py` closes the gap flagged above and in
+`federation_dp.py`'s honesty note. Implements two composition methods over `k`
+per-round Laplace releases spending `eps_total` lifetime budget: **basic**
+(linear, `eps0 = eps_total / k`, exact, always valid) and **advanced/strong**
+composition (Dwork-Rothblum-Vadhan 2010, inverted numerically at `delta=1e-5`).
+
+**Measured finding — weekly cadence does not survive any realistic lifetime
+budget.** For `eps_total` in {10, 50, 100} spent over 52 weekly rounds (1
+year), the composed per-round epsilon is 0.10-1.92 under either method. Rerunning
+the Cycle 14 pipeline (`federation_dp.run_round`) at every one of those exact
+values — not extrapolated, actually measured — collapses precision to
+0.0009-0.0014 and inflates `cost_vs_naive` to 44x-68x across all three
+institutions, at every budget tested. This matches (and confirms, at the
+composed values rather than Cycle 14's uncomposed sweep) Cycle 14's finding
+that utility collapses below eps~10 per round; composition pushes weekly
+per-round epsilon an order of magnitude below that floor even at the most
+generous budget tested.
+
+**A second finding, not obvious in advance: "advanced" composition is not
+uniformly better here.** The DRV10 bound's `k*eps0*(exp(eps0)-1)` term is
+negligible only for small eps0 (roughly `eps0 << 1/sqrt(k)`); at the
+utility-relevant eps0 range (10-20) that term explodes (`exp(10)~22000`) and
+the bound is *worse* than basic composition — degenerate to ~0 affordable
+rounds even at k=1. Basic composition is therefore the only usable accounting
+tool for the cadence-viability question below; this only strengthens the
+conclusion (there is no favorable-but-untried composition method hiding a
+better answer).
+
+**What cadence or budget would make it viable, quantified via basic
+composition** (using Cycle 14's own reference points: eps0=20 preserves
+near-baseline precision, eps0=10 is already visibly degraded but usable):
+
+| lifetime budget | target eps0/round | total rounds affordable, ever | quarterly cadence buys | semi-annual cadence buys |
+|---|---|---|---|---|
+| 10  | 20 (preserving) | 0.5  | ~1.5 months | ~3 months |
+| 10  | 10 (marginal)   | 1    | ~3 months   | ~6 months |
+| 50  | 20 (preserving) | 2.5  | ~7.5 months | ~1.25 years |
+| 50  | 10 (marginal)   | 5    | ~1.25 years | ~2.5 years |
+| 100 | 20 (preserving) | 5    | ~1.25 years | ~2.5 years |
+| 100 | 10 (marginal)   | 10   | ~2.5 years  | ~5 years |
+
+Honest conclusion: at a genuinely meaningful lifetime epsilon (10-100 is
+already generous by DP-literature norms — many production deployments target
+single-digit lifetime epsilon), **weekly federation rounds are not viable
+under this mechanism.** The fix is not a better composition formula — it's
+one or more of: (a) **slow the cadence to quarterly or semi-annual**, which
+this table shows buys 1-5 years of runway at usable per-round epsilon
+depending on budget; (b) **change the mechanism** (subsampling amplification,
+a tighter Renyi-DP/moments accountant, or a fundamentally different
+output-perturbation scheme with lower per-release sensitivity) rather than
+composition accounting alone, which is future work explicitly not attempted
+here; or (c) accept a much larger, and harder to justify as "private," lifetime
+budget. This is an engineering/privacy-policy tradeoff for the Team
+Lead/owner to weigh, not a decision this role makes.
+
+Measured numbers: `data/privacy_accountant_report.json`; run logged to the
+experiment registry (`tag=cycle15_privacy`).
+
 ## Open question for the owner (flagging, not deciding)
 
 Whether the "neutral aggregator" is consortium-operated infrastructure, a rotating

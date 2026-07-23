@@ -1,0 +1,335 @@
+{
+  "delta": 1e-05,
+  "budget_table": [
+    {
+      "eps_total": 10.0,
+      "rounds": 26,
+      "cadence": "26 rounds (weekly x 6mo)",
+      "delta": 1e-05,
+      "basic_eps0": 0.3846,
+      "advanced_eps0": 0.2984
+    },
+    {
+      "eps_total": 10.0,
+      "rounds": 52,
+      "cadence": "52 rounds (weekly x 1yr)",
+      "delta": 1e-05,
+      "basic_eps0": 0.1923,
+      "advanced_eps0": 0.213
+    },
+    {
+      "eps_total": 10.0,
+      "rounds": 104,
+      "cadence": "104 rounds (weekly x 2yr)",
+      "delta": 1e-05,
+      "basic_eps0": 0.0962,
+      "advanced_eps0": 0.1516
+    },
+    {
+      "eps_total": 50.0,
+      "rounds": 26,
+      "cadence": "26 rounds (weekly x 6mo)",
+      "delta": 1e-05,
+      "basic_eps0": 1.9231,
+      "advanced_eps0": 0.8464
+    },
+    {
+      "eps_total": 50.0,
+      "rounds": 52,
+      "cadence": "52 rounds (weekly x 1yr)",
+      "delta": 1e-05,
+      "basic_eps0": 0.9615,
+      "advanced_eps0": 0.6261
+    },
+    {
+      "eps_total": 50.0,
+      "rounds": 104,
+      "cadence": "104 rounds (weekly x 2yr)",
+      "delta": 1e-05,
+      "basic_eps0": 0.4808,
+      "advanced_eps0": 0.4576
+    },
+    {
+      "eps_total": 100.0,
+      "rounds": 26,
+      "cadence": "26 rounds (weekly x 6mo)",
+      "delta": 1e-05,
+      "basic_eps0": 3.8462,
+      "advanced_eps0": 1.1907
+    },
+    {
+      "eps_total": 100.0,
+      "rounds": 52,
+      "cadence": "52 rounds (weekly x 1yr)",
+      "delta": 1e-05,
+      "basic_eps0": 1.9231,
+      "advanced_eps0": 0.9024
+    },
+    {
+      "eps_total": 100.0,
+      "rounds": 104,
+      "cadence": "104 rounds (weekly x 2yr)",
+      "delta": 1e-05,
+      "basic_eps0": 0.9615,
+      "advanced_eps0": 0.6725
+    }
+  ],
+  "eps0_values_measured": [
+    0.1923,
+    0.213,
+    0.6261,
+    0.9024,
+    0.9615,
+    1.9231
+  ],
+  "measured_utility": {
+    "eps0_0.1923": {
+      "inst_001": {
+        "test_rows": 37779,
+        "federated_dp": {
+          "recall": 1.0,
+          "precision": 0.0014,
+          "cost_vs_naive": 43.6427,
+          "fraud_rows": 52
+        },
+        "mean_abs_probe_noise": 0.4517
+      },
+      "inst_002": {
+        "test_rows": 12513,
+        "federated_dp": {
+          "recall": 1.0,
+          "precision": 0.0013,
+          "cost_vs_naive": 46.9637,
+          "fraud_rows": 16
+        },
+        "mean_abs_probe_noise": 0.4562
+      },
+      "inst_003": {
+        "test_rows": 6826,
+        "federated_dp": {
+          "recall": 1.0,
+          "precision": 0.0009,
+          "cost_vs_naive": 68.38,
+          "fraud_rows": 6
+        },
+        "mean_abs_probe_noise": 0.4555
+      }
+    },
+    "eps0_0.2130": {
+      "inst_001": {
+        "test_rows": 37779,
+        "federated_dp": {
+          "recall": 1.0,
+          "precision": 0.0014,
+          "cost_vs_naive": 43.6427,
+          "fraud_rows": 52
+        },
+        "mean_abs_probe_noise": 0.4477
+      },
+      "inst_002": {
+        "test_rows": 12513,
+        "federated_dp": {
+          "recall": 1.0,
+          "precision": 0.0013,
+          "cost_vs_naive": 46.9637,
+          "fraud_rows": 16
+        },
+        "mean_abs_probe_noise": 0.4507
+      },
+      "inst_003": {
+        "test_rows": 6826,
+        "federated_dp": {
+          "recall": 1.0,
+          "precision": 0.0009,
+          "cost_vs_naive": 68.38,
+          "fraud_rows": 6
+        },
+        "mean_abs_probe_noise": 0.4491
+      }
+    },
+    "eps0_0.6261": {
+      "inst_001": {
+        "test_rows": 37779,
+        "federated_dp": {
+          "recall": 1.0,
+          "precision": 0.0014,
+          "cost_vs_naive": 43.6427,
+          "fraud_rows": 52
+        },
+        "mean_abs_probe_noise": 0.3734
+      },
+      "inst_002": {
+        "test_rows": 12513,
+        "federated_dp": {
+          "recall": 1.0,
+          "precision": 0.0013,
+          "cost_vs_naive": 46.9637,
+          "fraud_rows": 16
+        },
+        "mean_abs_probe_noise": 0.3723
+      },
+      "inst_003": {
+        "test_rows": 6826,
+        "federated_dp": {
+          "recall": 1.0,
+          "precision": 0.0009,
+          "cost_vs_naive": 68.38,
+          "fraud_rows": 6
+        },
+        "mean_abs_probe_noise": 0.3739
+      }
+    },
+    "eps0_0.9024": {
+      "inst_001": {
+        "test_rows": 37779,
+        "federated_dp": {
+          "recall": 1.0,
+          "precision": 0.0014,
+          "cost_vs_naive": 43.6427,
+          "fraud_rows": 52
+        },
+        "mean_abs_probe_noise": 0.326
+      },
+      "inst_002": {
+        "test_rows": 12513,
+        "federated_dp": {
+          "recall": 1.0,
+          "precision": 0.0013,
+          "cost_vs_naive": 46.9763,
+          "fraud_rows": 16
+        },
+        "mean_abs_probe_noise": 0.3321
+      },
+      "inst_003": {
+        "test_rows": 6826,
+        "federated_dp": {
+          "recall": 1.0,
+          "precision": 0.0009,
+          "cost_vs_naive": 68.38,
+          "fraud_rows": 6
+        },
+        "mean_abs_probe_noise": 0.3292
+      }
+    },
+    "eps0_0.9615": {
+      "inst_001": {
+        "test_rows": 37779,
+        "federated_dp": {
+          "recall": 1.0,
+          "precision": 0.0014,
+          "cost_vs_naive": 43.6427,
+          "fraud_rows": 52
+        },
+        "mean_abs_probe_noise": 0.3221
+      },
+      "inst_002": {
+        "test_rows": 12513,
+        "federated_dp": {
+          "recall": 1.0,
+          "precision": 0.0013,
+          "cost_vs_naive": 46.9637,
+          "fraud_rows": 16
+        },
+        "mean_abs_probe_noise": 0.3212
+      },
+      "inst_003": {
+        "test_rows": 6826,
+        "federated_dp": {
+          "recall": 1.0,
+          "precision": 0.0009,
+          "cost_vs_naive": 68.38,
+          "fraud_rows": 6
+        },
+        "mean_abs_probe_noise": 0.3238
+      }
+    },
+    "eps0_1.9231": {
+      "inst_001": {
+        "test_rows": 37779,
+        "federated_dp": {
+          "recall": 1.0,
+          "precision": 0.0014,
+          "cost_vs_naive": 43.6427,
+          "fraud_rows": 52
+        },
+        "mean_abs_probe_noise": 0.2235
+      },
+      "inst_002": {
+        "test_rows": 12513,
+        "federated_dp": {
+          "recall": 1.0,
+          "precision": 0.0013,
+          "cost_vs_naive": 46.9637,
+          "fraud_rows": 16
+        },
+        "mean_abs_probe_noise": 0.2249
+      },
+      "inst_003": {
+        "test_rows": 6826,
+        "federated_dp": {
+          "recall": 1.0,
+          "precision": 0.0009,
+          "cost_vs_naive": 68.3333,
+          "fraud_rows": 6
+        },
+        "mean_abs_probe_noise": 0.2202
+      }
+    }
+  },
+  "cadence_inverse": [
+    {
+      "eps_total": 10.0,
+      "eps0_target": 20.0,
+      "target_label": "utility_preserving",
+      "max_rounds_advanced": 0.0,
+      "max_rounds_basic": 0.5,
+      "weekly_cadence_equiv_years_advanced": 0.0
+    },
+    {
+      "eps_total": 10.0,
+      "eps0_target": 10.0,
+      "target_label": "marginal",
+      "max_rounds_advanced": 0.0,
+      "max_rounds_basic": 1.0,
+      "weekly_cadence_equiv_years_advanced": 0.0
+    },
+    {
+      "eps_total": 50.0,
+      "eps0_target": 20.0,
+      "target_label": "utility_preserving",
+      "max_rounds_advanced": 0.0,
+      "max_rounds_basic": 2.5,
+      "weekly_cadence_equiv_years_advanced": 0.0
+    },
+    {
+      "eps_total": 50.0,
+      "eps0_target": 10.0,
+      "target_label": "marginal",
+      "max_rounds_advanced": 0.0,
+      "max_rounds_basic": 5.0,
+      "weekly_cadence_equiv_years_advanced": 0.0
+    },
+    {
+      "eps_total": 100.0,
+      "eps0_target": 20.0,
+      "target_label": "utility_preserving",
+      "max_rounds_advanced": 0.0,
+      "max_rounds_basic": 5.0,
+      "weekly_cadence_equiv_years_advanced": 0.0
+    },
+    {
+      "eps_total": 100.0,
+      "eps0_target": 10.0,
+      "target_label": "marginal",
+      "max_rounds_advanced": 0.0,
+      "max_rounds_basic": 10.0,
+      "weekly_cadence_equiv_years_advanced": 0.0
+    }
+  ],
+  "utility_reference_thresholds": {
+    "utility_preserving": 20.0,
+    "marginal": 10.0
+  },
+  "advanced_composition_degeneracy_note": "At utility-relevant eps0 (10-20), the DRV10 strong composition bound's exp(eps0) term dominates and the bound already exceeds small/medium lifetime budgets at k=1 -- 'advanced' composition is only an improvement over basic for small eps0 (roughly eps0 << 1/sqrt(k)); at eps0=10-20 it is degenerate (reports ~0 affordable rounds) and basic composition is the only usable accounting tool for the cadence-viability question below.",
+  "cycle14_reference_sweep_note": "Cycle 14 (data/federation_dp_report.json) swept eps in [50, 20, 10, 5, 1] per round with NO composition (single-release framing). eps>=20 ~ near-baseline precision; eps=10 already visibly degrades precision for the largest institution (0.36-0.70 vs 0.40-0.88 unnoised); eps<=5 destroys precision (0.006-0.044, cost_vs_naive 5x-70x worse than naive)."
+}

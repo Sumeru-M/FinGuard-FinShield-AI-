@@ -1,29 +1,29 @@
 {
-  "eval_rows": 30585,
-  "eval_days": 10,
-  "fraud_rows": 66,
-  "recall": 0.9242424242424242,
-  "precision": 0.4621212121212121,
-  "alerts_per_day": 13.2,
+  "eval_rows": 70642,
+  "eval_days": 17,
+  "fraud_rows": 243,
+  "recall": 0.8559670781893004,
+  "precision": 0.15384615384615385,
+  "alerts_per_day": 79.52941176470588,
   "alert_cap": 200,
-  "false_block_count": 2,
-  "expected_cost_vs_naive": 0.17181818181818181,
+  "false_block_count": 21,
+  "expected_cost_vs_naive": 0.4690534979423868,
   "latency_ms": {
-    "p50": 0.185,
-    "p95": 0.217,
-    "p99": 0.24415999999999985,
-    "max": 41.343
+    "p50": 0.256,
+    "p95": 0.703,
+    "p99": 1.4005899999999964,
+    "max": 86.836
   },
   "latency_budget_ms": 100,
   "recall_by_fraud_type": {
-    "confirmed_fraud_cnp": 0.9047619047619048,
-    "confirmed_fraud_ato": 0.92,
-    "confirmed_fraud_synthetic_card": 0.95
+    "confirmed_fraud_cnp": 0.8584905660377359,
+    "confirmed_fraud_ato": 0.8048780487804879,
+    "confirmed_fraud_synthetic_card": 0.9272727272727272
   },
   "recall_by_variant": {
     "blatant": 1.0,
-    "evasive": 0.8936170212765957
+    "evasive": 0.8333333333333334
   },
-  "alert_payloads_queued": 132,
-  "hold_floored_alerts": 99
+  "alert_payloads_queued": 1352,
+  "hold_floored_alerts": 1143
 }

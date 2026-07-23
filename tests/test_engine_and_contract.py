@@ -58,6 +58,24 @@ def test_hold_expires_after_ttl_and_clears_on_disposition():
     assert "inst_001:card_000042" not in e.holds
 
 
+def test_disposition_requires_analyst_and_is_audited(tmp_path):
+    # C15 (D-049a): the label loop feeds model reputation — every disposition must
+    # carry an analyst identity and land in the append-only audit trail.
+    from finguard.scoring import AlertQueue
+    q = AlertQueue(str(tmp_path / "alerts.db"))
+    q.push({"alert_id": "a1", "transaction_id": "t1", "timestamp": "2026-07-01",
+            "risk_score": 0.9, "decision": "hard_block"})
+    with pytest.raises(PermissionError):
+        q.disposition("a1", "confirmed_fraud_cnp", analyst_id="")
+    q.disposition("a1", "confirmed_fraud_cnp", analyst_id="analyst_7")
+    q.disposition("a1", "confirmed_legitimate", analyst_id="analyst_9")  # override
+    trail = q.audit_trail("a1")
+    assert len(trail) == 2
+    assert trail[0]["analyst_id"] == "analyst_9"          # newest first
+    assert trail[0]["prior_disposition"] == "confirmed_fraud_cnp"  # override is visible
+    assert trail[1]["analyst_id"] == "analyst_7"
+
+
 def test_alert_payload_matches_frozen_d011_contract():
     e = _engine()
     r = e.score(_Txn(0, pd.Timestamp("2026-07-01 10:00"), card="card_contract"))

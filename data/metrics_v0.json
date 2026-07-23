@@ -1,19 +1,19 @@
 {
-  "test_rows": 30585,
-  "test_days": 10,
-  "test_fraud_rows": 66,
+  "test_rows": 70642,
+  "test_days": 17,
+  "test_fraud_rows": 243,
   "t_challenge": 0.06976744186046512,
   "t_block": 0.4117647058823529,
-  "recall_at_alert": 0.8333333333333334,
-  "precision_at_alert": 0.9322033898305084,
-  "alerts_per_day": 5.9,
-  "hard_blocks_per_day": 5.9,
-  "false_block_rate": 0.00013106589337789573,
-  "expected_cost": 59.0,
-  "naive_cost": 330.0,
-  "cost_vs_naive": 0.1787878787878788,
+  "recall_at_alert": 0.831275720164609,
+  "precision_at_alert": 0.6644736842105263,
+  "alerts_per_day": 17.88235294117647,
+  "hard_blocks_per_day": 12.117647058823529,
+  "false_block_rate": 0.00029829969175698516,
+  "expected_cost": 267.3,
+  "naive_cost": 1215.0,
+  "cost_vs_naive": 0.22,
   "recall_by_variant": {
     "blatant": 1.0,
-    "evasive": 0.7659574468085106
+    "evasive": 0.7333333333333333
   }
 }

@@ -160,6 +160,13 @@ class AlertQueue:
             alert_id TEXT PRIMARY KEY, transaction_id TEXT, timestamp TEXT,
             risk_score REAL, decision TEXT, payload TEXT,
             disposition TEXT DEFAULT NULL)""")
+        # C15 (D-049a): append-only audit trail — the label loop feeds model
+        # reputation, so every disposition is attributable (Cycle 4 poisoning surface)
+        self.conn.execute("""CREATE TABLE IF NOT EXISTS disposition_audit (
+            seq INTEGER PRIMARY KEY AUTOINCREMENT,
+            alert_id TEXT NOT NULL, disposition TEXT NOT NULL,
+            analyst_id TEXT NOT NULL, prior_disposition TEXT,
+            audited_at TEXT NOT NULL)""")
 
     def push(self, alert: dict):
         self.conn.execute(
@@ -179,11 +186,32 @@ class AlertQueue:
         row = cur.fetchone()
         return json.loads(row[0]) if row else None
 
-    def disposition(self, alert_id: str, label: str):
+    def disposition(self, alert_id: str, label: str, analyst_id: str):
         if label not in self.DISPOSITIONS:
             raise ValueError(f"invalid disposition {label!r}; must be one of {sorted(self.DISPOSITIONS)}")
+        if not analyst_id or not analyst_id.strip():
+            raise PermissionError("disposition requires an analyst identity (role auth)")
+        cur = self.conn.execute("SELECT disposition FROM alerts WHERE alert_id=?", (alert_id,))
+        row = cur.fetchone()
+        prior = row[0] if row else None
         self.conn.execute("UPDATE alerts SET disposition=? WHERE alert_id=?", (label, alert_id))
+        self.conn.execute(
+            "INSERT INTO disposition_audit (alert_id, disposition, analyst_id, "
+            "prior_disposition, audited_at) VALUES (?,?,?,?,datetime('now'))",
+            (alert_id, label, analyst_id.strip(), prior))
         self.conn.commit()
+
+    def audit_trail(self, alert_id: str | None = None, limit: int = 100):
+        q = "SELECT alert_id, disposition, analyst_id, prior_disposition, audited_at " \
+            "FROM disposition_audit"
+        args: tuple = ()
+        if alert_id:
+            q += " WHERE alert_id=?"
+            args = (alert_id,)
+        q += " ORDER BY seq DESC LIMIT ?"
+        cur = self.conn.execute(q, args + (limit,))
+        cols = ["alert_id", "disposition", "analyst_id", "prior_disposition", "audited_at"]
+        return [dict(zip(cols, r)) for r in cur.fetchall()]
 
 
 from pydantic import BaseModel
@@ -235,10 +263,16 @@ def create_app():
     def alerts(limit: int = 50):
         return queue.pending(limit)
 
+    @app.get("/alerts/audit")
+    def audit(alert_id: str | None = None, limit: int = 100):
+        return queue.audit_trail(alert_id, limit)
+
     @app.post("/alerts/{alert_id}/disposition/{label}")
-    def disposition(alert_id: str, label: str):
+    def disposition(alert_id: str, label: str, analyst_id: str = ""):
         try:
-            queue.disposition(alert_id, label)
+            queue.disposition(alert_id, label, analyst_id)
+        except PermissionError as e:
+            raise HTTPException(401, str(e))
         except ValueError as e:
             raise HTTPException(422, str(e))
         hold_cleared = False
