@@ -45,6 +45,17 @@ FEATURE_COLUMNS = [
     "merchant_observed_age_days",  # how long WE have seen this merchant
     "device_observed_age_days",    # how long WE have seen this device (vs self-reported)
     "device_alltime_cards",        # distinct cards ever on this device (bot/mule signal)
+    # Cycle 16 (D-051): sleeper-device counter-feature. The C15 red-team showed a
+    # device with GENUINE aged history beats tenure-based trust (61.5% recall cell).
+    # The pivot signal isn't device age — it's a trusted device suddenly touching a
+    # card it has never touched. Raw pair-age was tried first and HURT (time-confounded:
+    # every legit pair is young early in the stream — ablation in Cycle 16 report);
+    # the RATIO is time-stationary: legit card+device grow up together (ratio ~1 at any
+    # point in the stream); a sleeper pivot is an old device on a brand-new pair (~0).
+    # (A device_new_cards_7d companion feature was tried and REJECTED by ablation — it
+    # measurably hurt recall; Cycle 16 report has the table. Discipline: keep only what
+    # measurably helps.)
+    "pair_device_life_ratio",      # pair age / device age (0/0 -> 1.0, grew together)
     # Cycle 4 (D-020): label-loop feedback — analyst dispositions become features.
     # Point-in-time correct: a confirmation only becomes visible LABEL_LATENCY after
     # the fraud event (investigation takes time; no oracle labels at scoring time).
@@ -81,6 +92,7 @@ FEATURE_DISPLAY = {
     "merchant_observed_age_days": "How long this merchant has been observed",
     "device_observed_age_days": "How long this device has been observed",
     "device_alltime_cards": "Total distinct cards seen on this device",
+    "pair_device_life_ratio": "Share of this device's life it has known this card",
     "device_confirmed_fraud_links": "Device linked to confirmed fraud",
     "card_prior_confirmed_fraud": "Card previously confirmed defrauded",
     "merchant_confirmed_fraud_links": "Merchant linked to confirmed fraud",
@@ -105,6 +117,8 @@ class InMemoryFeatureStore:
         self.merchant_stats = defaultdict(lambda: [None, 0])      # first_seen_ts, count
         self.device_first_seen = {}                               # device -> ts
         self.device_all_cards = defaultdict(set)                  # device -> {cards}
+        # Cycle 16 state
+        self.pair_first_seen = {}                                 # (device,card) -> ts
         # Cycle 4: label-loop reputation. Each entry: list of timestamps at which a
         # confirmation BECOMES VISIBLE (event ts + LABEL_LATENCY, or live disposition ts)
         self.device_fraud_marks = defaultdict(list)
@@ -203,7 +217,14 @@ class InMemoryFeatureStore:
         m_age = (ts - first_m).total_seconds() / 86400 if first_m is not None else 0.0
         d_first = self.device_first_seen.get(dk)
         d_age = (ts - d_first).total_seconds() / 86400 if d_first is not None else 0.0
+        pk = (dk, t.card_id)
+        pair_first = self.pair_first_seen.get(pk)
+        dev_first = self.device_first_seen.get(dk)
+        pair_age = (ts - pair_first).total_seconds() if pair_first is not None else 0.0
+        dev_age = (ts - dev_first).total_seconds() if dev_first is not None else 0.0
         return {
+            # 0/0 (brand-new device, brand-new pair) -> 1.0: they "grew up together"
+            "pair_device_life_ratio": float(pair_age / dev_age) if dev_age > 0 else 1.0,
             "device_confirmed_fraud_links": sum(1 for m in self.device_fraud_marks[dk] if m <= ts),
             "card_prior_confirmed_fraud": min(sum(1 for m in self.card_fraud_marks[ck] if m <= ts), 5),
             "merchant_confirmed_fraud_links": sum(1 for m in self.merchant_fraud_marks[mk] if m <= ts),
@@ -240,6 +261,7 @@ class InMemoryFeatureStore:
         ms[1] += 1
         self.device_first_seen.setdefault(dk, t.timestamp)
         self.device_all_cards[dk].add(t.card_id)
+        self.pair_first_seen.setdefault((dk, t.card_id), t.timestamp)
 
 
 def build_feature_frame(df: pd.DataFrame) -> pd.DataFrame:
