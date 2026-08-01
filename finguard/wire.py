@@ -30,20 +30,20 @@ import pandas as pd
 from sklearn.isotonic import IsotonicRegression
 from sklearn.model_selection import StratifiedKFold
 
-R_FRAC = 0.10      # residual loss fraction if fraud is held (mostly recovered)
-D_FRAC = 0.002     # friction cost fraction for delaying a legit wire
-REVIEW_COST = 50.0   # fixed analyst cost per held wire
-HUMAN_RELEASE_ABOVE = 100_000.0   # D-028
+# C18: cost/control values from finguard.config (defaults unchanged — byte-identical)
+from finguard.config import cfg
+R_FRAC = cfg.wire_r_frac           # residual loss fraction if fraud is held (default 0.10)
+D_FRAC = cfg.wire_d_frac           # friction cost fraction for delaying a legit wire (0.002)
+REVIEW_COST = cfg.wire_review_cost   # fixed analyst cost per held wire (default 50.0)
+HUMAN_RELEASE_ABOVE = cfg.wire_human_release_above   # D-028 (default 100_000)
 DISCOVERY_LATENCY = pd.Timedelta(days=5)   # C13/F4: BEC is discovered days after the loss;
 # an establishment TEST payment isn't known to be fraud until its STRIKE is investigated.
-NEW_BENEFICIARY_CAP = 50_000.0    # D-040: cumulative $ to a new/changed beneficiary
-# allowed while UNVERIFIED, pending callback/CoP verification (raised from $25k — median
-# invoice ~$13k, so $25k held two normal invoices to a legit new supplier)
+NEW_BENEFICIARY_CAP = cfg.wire_new_beneficiary_cap   # D-040 (default 50_000)
 VERIFY_DELAY_DAYS = (2.0, 7.0)    # D-041: a callback takes this long to complete
 CONFIRM_PROB_LEGIT = 0.97         # a real supplier answers an independent callback
 CONFIRM_PROB_FRAUD = 0.05         # a fraud "supplier" rarely does (residual: social engineering)
-PER_WIRE_FLOOR = 10_000.0         # D-047: ANY wire above this to an unverified beneficiary
-# is held regardless of cumulative — closes the single-shot BEC seam the $50k cap opened
+PER_WIRE_FLOOR = cfg.wire_per_wire_floor   # D-047: ANY wire above this to an unverified
+# beneficiary is held regardless of cumulative — closes the single-shot BEC seam (default 10_000)
 ESCALATE_AFTER_DAYS = 14.0        # C15 override path: unverified accounts escalate to a
 ESCALATE_CONFIRM_LEGIT = 0.90     # manual verification review — legit suppliers get a
 ESCALATE_CONFIRM_FRAUD = 0.02     # second path to full service; fraud still rarely clears

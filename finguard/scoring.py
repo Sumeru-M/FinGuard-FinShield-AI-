@@ -20,12 +20,13 @@ import json
 import numpy as np
 import pandas as pd
 
+from finguard.config import cfg
 from finguard.features import FEATURE_COLUMNS, FEATURE_DISPLAY, InMemoryFeatureStore
 
-DB_PATH = "data/alerts.db"
+DB_PATH = cfg.alerts_db                          # C18: was "data/alerts.db"
 
 
-HOLD_TTL = pd.Timedelta(hours=48)
+HOLD_TTL = pd.Timedelta(hours=cfg.hold_ttl_hours)  # C18: was hours=48
 
 # D-011 analyst-review fixes (Cycle 5): units for day/money-denominated features
 UNIT_DAYS = {"device_age_days", "device_observed_age_days", "merchant_observed_age_days"}
@@ -41,7 +42,8 @@ def _fmt_value(col: str, v: float) -> str:
 
 
 class ScoringEngine:
-    def __init__(self, model_path="data/model_v0.pkl", store=None):
+    def __init__(self, model_path=None, store=None):
+        model_path = model_path or cfg.model_path   # C18: was "data/model_v0.pkl"
         with open(model_path, "rb") as f:
             bundle = pickle.load(f)
         self.model = bundle["model"]
@@ -214,22 +216,62 @@ class AlertQueue:
         return [dict(zip(cols, r)) for r in cur.fetchall()]
 
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, field_validator
+
+
+class Metrics:
+    """C18: minimal in-process metrics — no external deps. Decision counts, alert-queue
+    high-water, and a bounded latency window for percentiles."""
+
+    def __init__(self, window: int = 5000):
+        self.decisions: dict[str, int] = {"approve": 0, "soft_challenge": 0, "hard_block": 0}
+        self.scored = 0
+        self.errors = 0
+        self._lat: list[float] = []
+        self._window = window
+
+    def record(self, decision: str, latency_ms: float):
+        self.scored += 1
+        self.decisions[decision] = self.decisions.get(decision, 0) + 1
+        self._lat.append(latency_ms)
+        if len(self._lat) > self._window:
+            self._lat = self._lat[-self._window:]
+
+    def snapshot(self, queue_depth: int) -> dict:
+        lat = sorted(self._lat)
+        def pct(p):
+            if not lat:
+                return 0.0
+            return round(lat[min(len(lat) - 1, int(len(lat) * p))], 3)
+        return {
+            "scored_total": self.scored,
+            "errors_total": self.errors,
+            "decisions": dict(self.decisions),
+            "latency_ms": {"p50": pct(0.50), "p95": pct(0.95), "p99": pct(0.99),
+                           "window": len(lat)},
+            "alert_queue_depth": queue_depth,
+        }
 
 
 class TxnIn(BaseModel):
-    transaction_id: str
+    transaction_id: str = Field(min_length=1, max_length=128)
     institution_id: str = "inst_001"
     timestamp: str
-    card_id: str
+    card_id: str = Field(min_length=1, max_length=128)
     merchant_id: str
     merchant_category: str
-    amount: float
-    country: str
+    amount: float = Field(ge=0)                       # C18: amount can't be negative
+    country: str = Field(min_length=1, max_length=8)
     device_id: str
-    device_age_days: float
+    device_age_days: float = Field(ge=0)              # C18: age can't be negative
     channel: str
-    session_behavior_score: float
+    session_behavior_score: float = Field(ge=0, le=1)  # C18: it's a [0,1] score
+
+    @field_validator("timestamp")
+    @classmethod
+    def _valid_ts(cls, v):
+        pd.Timestamp(v)   # raises if unparseable -> 422 rather than a 500 downstream
+        return v
 
 
 class _T:  # engine expects attribute access with a pandas Timestamp
@@ -240,17 +282,50 @@ class _T:  # engine expects attribute access with a pandas Timestamp
 
 def create_app():
     """FastAPI wrapper — the network-facing form of the engine."""
+    import logging
     from fastapi import Body, FastAPI, HTTPException
 
+    logging.basicConfig(level=cfg.log_level.upper(),
+                        format='{"ts":"%(asctime)s","level":"%(levelname)s","msg":"%(message)s"}')
+    log = logging.getLogger("finguard")
+
     app = FastAPI(title="FinGuard scoring service")
-    engine = ScoringEngine()
+    metrics = Metrics()
+    # C18: graceful startup — a missing/corrupt model bundle becomes a 503-not-ready
+    # service rather than an import-time crash.
+    try:
+        engine = ScoringEngine()
+        model_ready = True
+    except Exception as e:      # noqa: BLE001 - want any load failure to degrade gracefully
+        engine = None
+        model_ready = False
+        log.error(f"model load failed: {e}")
     queue = AlertQueue()
+
+    @app.get("/health")
+    def health():
+        return {"status": "ok"}                       # process is up
+
+    @app.get("/ready")
+    def ready():
+        if not model_ready:
+            raise HTTPException(503, "model not loaded")
+        return {"status": "ready"}
+
+    @app.get("/metrics")
+    def metrics_endpoint():
+        return metrics.snapshot(len(queue.pending(10_000)))
 
     @app.post("/score")
     def score(txn: TxnIn = Body(...)):
+        if not model_ready:
+            metrics.errors += 1
+            raise HTTPException(503, "model not loaded")
         result = engine.score(_T(txn))
+        metrics.record(result["decision"], result.get("latency_ms", 0.0))
         if "alert" in result:
             queue.push(result["alert"])
+        log.info(f'scored txn={txn.transaction_id} decision={result["decision"]}')
         return result
 
     @app.get("/dashboard")
@@ -293,4 +368,4 @@ def create_app():
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(create_app(), host="127.0.0.1", port=8100, log_level="warning")
+    uvicorn.run(create_app(), host=cfg.host, port=cfg.port, log_level=cfg.log_level)

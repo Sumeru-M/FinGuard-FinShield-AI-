@@ -31,8 +31,11 @@ import pandas as pd
 from sklearn.isotonic import IsotonicRegression
 from sklearn.model_selection import StratifiedKFold
 
-COST_FN, COST_FRAUD_HOLD, COST_FP_BLOCK, COST_FP_HOLD = 10.0, 1.0, 1.0, 0.2
-ALERT_CAP_PER_DAY = 100   # D-023: separate P2P lane
+# C18: values from finguard.config (defaults unchanged — byte-identical)
+from finguard.config import cfg
+COST_FN, COST_FRAUD_HOLD, COST_FP_BLOCK, COST_FP_HOLD = (
+    cfg.p2p_cost_fn, cfg.p2p_cost_fraud_hold, cfg.p2p_cost_fp_block, cfg.p2p_cost_fp_hold)
+ALERT_CAP_PER_DAY = cfg.p2p_alert_cap   # D-023: separate P2P lane
 
 P2P_FEATURES = [
     "amount", "log_amount",
@@ -256,8 +259,8 @@ def analytic_thresholds(oof, n_days):
 # first-time-recipient payments. Empirically-grounded effectiveness (UK PSR data shows
 # CoP + scam warnings interrupt a meaningful share of APP scams; delayed settlement adds
 # a recall window). Applied to fraud the MODEL MISSES — friction is the second line.
-COP_ABANDON_APP = 0.40       # share of prompted APP-scam victims who abandon on CoP mismatch
-SETTLEMENT_RECALL = 0.30     # share of the remainder stopped in the delayed-settlement window
+COP_ABANDON_APP = cfg.p2p_cop_abandon_app       # C18: default 0.40
+SETTLEMENT_RECALL = cfg.p2p_settlement_recall   # C18: default 0.30
 
 
 def apply_friction(te, yb, alerted, seed=42):

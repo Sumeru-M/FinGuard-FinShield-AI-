@@ -58,6 +58,32 @@ def test_hold_expires_after_ttl_and_clears_on_disposition():
     assert "inst_001:card_000042" not in e.holds
 
 
+def test_service_observability_and_hardening():
+    # C18: health/ready/metrics contract + input hardening, via FastAPI TestClient.
+    from fastapi.testclient import TestClient
+    from finguard.scoring import create_app
+    client = TestClient(create_app())
+
+    assert client.get("/health").json()["status"] == "ok"
+    assert client.get("/ready").json()["status"] == "ready"   # model bundle present
+
+    good = {"transaction_id": "m1", "timestamp": "2026-07-01T10:00:00",
+            "card_id": "card_000042", "merchant_id": "m_1", "merchant_category": "grocery",
+            "amount": 50.0, "country": "US", "device_id": "d1", "device_age_days": 100.0,
+            "channel": "ecom", "session_behavior_score": 0.9}
+    assert client.post("/score", json=good).status_code == 200
+
+    m = client.get("/metrics").json()
+    assert m["scored_total"] >= 1
+    assert set(m["decisions"]) >= {"approve", "soft_challenge", "hard_block"}
+    assert "p99" in m["latency_ms"]
+
+    # hardening: out-of-range / malformed inputs are rejected with 422, not 500
+    for bad in [{**good, "amount": -5.0}, {**good, "session_behavior_score": 1.7},
+                {**good, "device_age_days": -1.0}, {**good, "timestamp": "not-a-date"}]:
+        assert client.post("/score", json=bad).status_code == 422
+
+
 def test_disposition_requires_analyst_and_is_audited(tmp_path):
     # C15 (D-049a): the label loop feeds model reputation — every disposition must
     # carry an analyst identity and land in the append-only audit trail.

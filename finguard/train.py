@@ -25,8 +25,11 @@ from finguard.features import FEATURE_COLUMNS
 #   legit hard-blocked               = 1.0   (a false decline)
 #   legit soft-challenged            = 0.3   (recoverable friction)
 #   fraud soft-challenged            = 1.0   (step-up stops most, not all)
-COST_FN, COST_FP_BLOCK, COST_FP_CHAL, COST_FRAUD_CHAL = 5.0, 1.0, 0.3, 1.0
-ALERT_CAP_PER_DAY = 200  # D-007
+# C18: values from finguard.config (defaults unchanged — byte-identical)
+from finguard.config import cfg
+COST_FN, COST_FP_BLOCK, COST_FP_CHAL, COST_FRAUD_CHAL = (
+    cfg.card_cost_fn, cfg.card_cost_fp_block, cfg.card_cost_fp_chal, cfg.card_cost_fraud_chal)
+ALERT_CAP_PER_DAY = cfg.card_alert_cap  # D-007
 
 
 def expected_cost(y, score, t_chal, t_block):
