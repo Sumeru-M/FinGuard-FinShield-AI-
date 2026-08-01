@@ -26,7 +26,7 @@ action without a human.
 | **P2P** | 89.3% (with CoP friction) | 84.4% model-only; installment-scam tail closed by friction, not ML |
 | **Wire** | 99.5% by value | Per-dollar cost model; verification-completion control on new beneficiaries |
 
-Full per-cycle detail: [`phase1/CYCLE*_RESULTS.md`](phase1/) · architecture:
+Final scorecard: [`phase1/PILOT_CLOSING_REPORT.md`](phase1/PILOT_CLOSING_REPORT.md) · architecture:
 [`ARCHITECTURE.md`](ARCHITECTURE.md) · decisions (law): [`phase0/00_decisions_log.md`](phase0/00_decisions_log.md)
 
 **Honest finding worth knowing:** two channels have a structurally hard fraud cell that
@@ -62,7 +62,7 @@ finguard/
   federation.py, federation_dp.py             Federated simulation + DP hardening
   experiments.py                              Run registry (data/experiments.jsonl)
 phase0/          Framing packs + 00_decisions_log.md (D-001…, binding law)
-phase1/          Cycle-by-cycle results reports (all channels)
+phase1/          Pilot closing report + federation orchestration spec
 .claude/agents/  11 role-agent definitions + _TEAM.md charter
 tests/           pytest suite
 ```
