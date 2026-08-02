@@ -52,6 +52,10 @@ class Config:
 
         # --- Scoring engine (cards) ---
         self.hold_ttl_hours = _f("FINGUARD_HOLD_TTL_HOURS", 48.0)
+        # C19: feature-store backend — "memory" (default, pilot) or "redis" (production).
+        # redis is used only when backend=redis AND redis_url is set.
+        self.feature_store = _s("FINGUARD_FEATURE_STORE", "memory")
+        self.behavioral_retention_days = _i("FINGUARD_BEHAVIORAL_RETENTION_DAYS", 90)  # D-008
 
         # --- Card cost model (D-010: 5:1 FN:FP) ---
         self.card_cost_fn = _f("FINGUARD_CARD_COST_FN", 5.0)

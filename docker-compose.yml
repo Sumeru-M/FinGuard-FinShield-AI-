@@ -1,0 +1,46 @@
+# Cycle 19 (D-052): local production-shaped stack. Brings up Redpanda (Kafka-API),
+# Redis, and the scoring service wired to both. Runnable the day a Docker daemon exists;
+# written and reviewed now so the swap is a bring-up, not a build.
+#
+#   docker compose up        # start redis + redpanda + scoring service
+#   curl localhost:8100/ready
+#
+services:
+  redis:
+    image: redis:7-alpine
+    ports: ["6379:6379"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  redpanda:
+    image: redpandadata/redpanda:latest
+    command:
+      - redpanda start
+      - --smp 1
+      - --overprovisioned
+      - --kafka-addr PLAINTEXT://0.0.0.0:9092
+      - --advertise-kafka-addr PLAINTEXT://redpanda:9092
+    ports: ["9092:9092"]
+    healthcheck:
+      test: ["CMD-SHELL", "rpk cluster health | grep -q Healthy"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  scoring:
+    build: .
+    ports: ["8100:8100"]
+    environment:
+      FINGUARD_HOST: 0.0.0.0
+      FINGUARD_PORT: "8100"
+      FINGUARD_LOG_LEVEL: info
+      FINGUARD_FEATURE_STORE: redis
+      FINGUARD_REDIS_URL: redis://redis:6379/0
+      FINGUARD_KAFKA_BROKERS: redpanda:9092
+      # secrets (e.g. FINGUARD_SANCTIONS_FEED_TOKEN) injected here at deploy, never committed
+    depends_on:
+      redis: {condition: service_healthy}
+      redpanda: {condition: service_healthy}

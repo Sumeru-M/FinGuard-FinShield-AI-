@@ -28,6 +28,18 @@ DB_PATH = cfg.alerts_db                          # C18: was "data/alerts.db"
 
 HOLD_TTL = pd.Timedelta(hours=cfg.hold_ttl_hours)  # C18: was hours=48
 
+
+def _make_store():
+    """C19: pick the feature-store backend from config. Defaults to the in-process
+    store (pilot); uses Redis when explicitly configured, keeping the pilot path
+    unchanged and the production path one env var away."""
+    if cfg.feature_store == "redis" and cfg.redis_url:
+        import redis
+        from finguard.redis_store import RedisFeatureStore
+        client = redis.Redis.from_url(cfg.redis_url)
+        return RedisFeatureStore(client, ttl_seconds=cfg.behavioral_retention_days * 86400)
+    return InMemoryFeatureStore()
+
 # D-011 analyst-review fixes (Cycle 5): units for day/money-denominated features
 UNIT_DAYS = {"device_age_days", "device_observed_age_days", "merchant_observed_age_days"}
 UNIT_MONEY = {"amount", "amount_sum_24h"}
@@ -50,7 +62,7 @@ class ScoringEngine:
         self.calibrator = bundle.get("calibrator")   # C3-2: optional isotonic calibration
         self.t_challenge = bundle["t_challenge"]
         self.t_block = bundle["t_block"]
-        self.store = store or InMemoryFeatureStore()
+        self.store = store or _make_store()
         self.booster = self.model.booster_
         # Investigation-hold state (Cycle 2 / D-015): card -> hold-set timestamp.
         # Closes the adaptive-repetition hole: once a card alerts, later txns can't
