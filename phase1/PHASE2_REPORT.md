@@ -46,9 +46,22 @@ without waiting on external gates. Decisions: D-052.
   new deps `redis` (lazy) + `fakeredis` (test) pinned; `confluent-kafka` deferred to
   stream go-live. Infra is code-complete but **not executed** (no Docker daemon here).
 
-## Cycle 20 — MLOps + CI  *(pending)*
-- Model versioning/rollback (registry + `current` pointer, building on `experiments.py`),
-  drift-monitor hooks, CI running the test suite (Phase 0 gates as the regression wall).
+## Cycle 20 — MLOps + CI
+- **`finguard/model_registry.py`**: content-addressed versioned bundles under `models/`,
+  a movable `current` pointer the scoring service reads, and `rollback()` (repoint
+  `current` at any prior version — no retrain, no code redeploy). `train.py` now publishes
+  a version on every run; `ScoringEngine` loads `current` (falls back to the pilot path).
+- **`finguard/drift.py`**: PSI-based drift monitoring (feature + score distributions, live
+  vs training window) with the standard <0.10 / 0.10–0.25 / >0.25 thresholds. It flags;
+  it does not act — retrain/rollback stays a human decision.
+- **`.github/workflows/ci.yml`**: runs the suite on push/PR — the Phase 0 gate tests are
+  the regression wall.
+- **`.gitignore`** added and `__pycache__`/cache untracked (22 files) — repo hygiene.
+- **Verified**: **24 tests pass** (21 + 3); registry end-to-end (publish → `current` →
+  engine loads it → rollback) confirmed with the real model bundle.
 
 ---
-*Phase 2 status: 2 of 3 cycles complete. No open owner decisions.*
+*Phase 2 COMPLETE: all 3 cycles done (config/observability/hardening; real infra path;
+MLOps/CI). System is configurable, observable, containerized, stream-capable, versioned,
+drift-monitored, and CI-gated — deployable the day the external gates (Docker daemon,
+legal sign-off, real institutions) open. No open owner decisions.*

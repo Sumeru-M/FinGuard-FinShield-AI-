@@ -55,7 +55,10 @@ def _fmt_value(col: str, v: float) -> str:
 
 class ScoringEngine:
     def __init__(self, model_path=None, store=None):
-        model_path = model_path or cfg.model_path   # C18: was "data/model_v0.pkl"
+        # C20: prefer the registry's `current` version; fall back to the pilot path.
+        if model_path is None:
+            from finguard.model_registry import current_path
+            model_path = current_path() or cfg.model_path
         with open(model_path, "rb") as f:
             bundle = pickle.load(f)
         self.model = bundle["model"]

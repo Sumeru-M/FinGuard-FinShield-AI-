@@ -125,20 +125,23 @@ def main():
           "each other's scale mean flags track actual fraud, not geography):")
     print(bias_proxy_review(test, score, t_chal).to_string())
 
-    with open("data/model_v0.pkl", "wb") as f:
-        pickle.dump({"model": model, "calibrator": calibrator,
-                     "t_challenge": t_chal, "t_block": t_block,
-                     "features": FEATURE_COLUMNS}, f)
+    bundle = {"model": model, "calibrator": calibrator,
+              "t_challenge": t_chal, "t_block": t_block, "features": FEATURE_COLUMNS}
+    with open("data/model_v0.pkl", "wb") as f:      # kept for back-compat / pilot path
+        pickle.dump(bundle, f)
     with open("data/metrics_v0.json", "w") as f:
         json.dump(metrics, f, indent=2)
 
     from finguard.experiments import log_run
-    run_id = log_run("train", params={
-        "model": "LGBMClassifier", "n_estimators": 400, "learning_rate": 0.05,
-        "num_leaves": 63, "scale_pos_weight": COST_FN,
-        "dataset_rows": int(len(ff)), "features": FEATURE_COLUMNS,
-    }, metrics=metrics, tag="")
-    print(f"\nsaved data/model_v0.pkl, data/metrics_v0.json  (registry: {run_id})")
+    params = {"model": "LGBMClassifier", "n_estimators": 400, "learning_rate": 0.05,
+              "num_leaves": 63, "scale_pos_weight": COST_FN,
+              "dataset_rows": int(len(ff)), "features": FEATURE_COLUMNS}
+    run_id = log_run("train", params=params, metrics=metrics, tag="")
+
+    # C20: publish a versioned bundle and point `current` at it (rollback-capable)
+    from finguard.model_registry import publish
+    version = publish(bundle, metrics, params)
+    print(f"\nsaved data/model_v0.pkl  (registry: {run_id}, model version: {version})")
 
 
 if __name__ == "__main__":

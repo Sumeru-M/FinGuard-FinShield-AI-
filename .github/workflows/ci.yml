@@ -1,0 +1,24 @@
+# Cycle 20 (D-052): CI — the test suite is the regression wall. The Phase 0 gate tests
+# (latency, alert caps, beats-naive, frozen alert contract) fail the build if a change
+# regresses a locked guarantee.
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt pytest
+      - name: Run test suite (regression wall)
+        run: pytest -q
